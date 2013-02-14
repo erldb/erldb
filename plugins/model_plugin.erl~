@@ -1,0 +1,6 @@
+-module(model_plugin).
+
+-compile(export_all).
+
+pre_foo(_,_) ->
+    rebar_log:log(error, "It is pre...~n", []).
