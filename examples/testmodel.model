@@ -1,10 +1,12 @@
-name: my_model
+import: users, tags
+
+name: blog_entry
 backend: mnesia
 
 /* This is a test comment */
 
 fields:
-    id
-    title :: string(255)
-    views :: integer()
-    description :: string()    
+    id :: primary_key(auto_increment)
+    title :: string(not_null, max_size=255)
+    text :: string()
+    author :: foreign_key(users)
