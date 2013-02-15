@@ -45,7 +45,11 @@ create(#'MODEL'{imports = Imports, name = {Name, NameLine}, backend = {Backend, 
     Forms = [ erl_syntax:revert(AST) || AST <- [ModuleAST, ExportAST, BackendGetFunctionAST, FieldsfunctionAST] ],
 
     case compile:forms(Forms) of
-        {ok,ModuleName,Binary}           -> code:load_binary(ModuleName, "z", Binary);
-        {ok,ModuleName,Binary,_Warnings} -> code:load_binary(ModuleName, "z", Binary);
+        {ok,ModuleName,Binary}           -> 
+	    FileName = atom_to_list(ModuleName) ++ ".beam",
+	    file:write_file(FileName, Binary);
+        {ok,ModuleName,Binary,_Warnings} ->
+	    FileName = atom_to_list(ModuleName) ++ ".beam",
+	    file:write_file(FileName, Binary);
         P -> P
     end.
