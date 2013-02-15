@@ -1,8 +1,8 @@
--module(erl_db_creator).
+-module(erl_db_compiler).
 
 -include("../include/erl_db_types.hrl").
 
--export([create/1]).
+-export([compile/1]).
 
 getter_ast(FunctionName) ->
     erl_syntax:function(
@@ -29,7 +29,7 @@ parse_fields([#'FIELD'{name = Name, type = Type, line = Line}|Tl], {Exports, Fun
     parse_fields(Tl, {[GetterExport|Exports], [GetterFunction|Functions]}).
 
 
-create(#'MODEL'{imports = Imports, name = {Name, NameLine}, backend = {Backend, BackendLine}, fields = Fields, functions = Functions}) ->
+compile(#'MODEL'{imports = Imports, name = {Name, NameLine}, backend = {Backend, BackendLine}, fields = Fields, functions = Functions}) ->
     ModuleAST = erl_db_creator_helpers:module(Name),
     BackendGetFunctionAST = erl_db_creator_helpers:function("backend", [], none, [erl_syntax:atom(Backend)]),
     FieldsfunctionAST = erl_db_creator_helpers:function("fields", [], none, [erl_db_creator_helpers:proplist_from_fields(Fields)]),
@@ -47,9 +47,11 @@ create(#'MODEL'{imports = Imports, name = {Name, NameLine}, backend = {Backend, 
     case compile:forms(Forms) of
         {ok,ModuleName,Binary}           -> 
 	    FileName = atom_to_list(ModuleName) ++ ".beam",
-	    file:write_file(FileName, Binary);
+	    file:write_file(FileName, Binary),
+	    {ok, FileName};
         {ok,ModuleName,Binary,_Warnings} ->
 	    FileName = atom_to_list(ModuleName) ++ ".beam",
-	    file:write_file(FileName, Binary);
+	    file:write_file(FileName, Binary),
+	    {ok, FileName};
         P -> P
     end.
