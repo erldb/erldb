@@ -1,23 +1,21 @@
 -module(model_plugin).
 
--compile(export_all).
+-export([post_model/2]).
 
 -define(PATH, "examples/").
 
-model(_,_) ->
-    read_models().
-
--spec read_models() -> list(atom()) | [].
-read_models() ->
-    rebar_log:log(info, "Reading models...~n", []),
+post_model(_,_) ->
     {ok, Filenames} = file:list_dir("examples"),
-    read_models(Filenames, []).
+    code:add_path("ebin"),
+    rebar_log:log(info, "Files: ~p~n", [Filenames]),
+    compile_models(Filenames, []).
 
--spec read_models(list(atom())|[], Acc) -> Acc when
-      Acc :: list(atom())|[].
-read_models([], Acc) ->
-    Acc;
-read_models([H|T], Acc) ->
-    {module, Module} = test:create(?PATH ++ H),
-   %%  rebar_log:log(info, "Created ~p...~n", [Module]),
-    read_models(T, [Module|Acc]).
+compile_models([], Acc) ->
+    rebar_log:log(info, "Done...~n", []);
+compile_models([H|T], Acc) ->
+    {ok, Module} = test:create(?PATH ++ H),
+    rebar_log:log(info, "Created ~p...~n", [Module]),
+    file:copy(Module, "ebin/" ++ Module),
+    file:delete(Module),
+    compile_models(T, [Module|Acc]).
+
