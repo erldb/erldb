@@ -1,56 +1,46 @@
-Nonterminals type validation field_declaration field_declaration_list function_declaration_list name_declaration backend_declaration fields_declaration functions_declaration model.
+Nonterminals value field_argument field_argument_list field fields_list backend_decl import_list model.
 
-Terminals 'validator' 'colon' 'lparen' 'rparen' 'int_constant' 'name' 'backend' 'fields' 'functions' 'integer' 'string' 'binary' 'float' 'datetime' 'timestamp' 'boolean' 'mixed' 'identifier'.
+Terminals 'validator' 'colon' 'lparen' 'rparen' 'equal' 'comma' 'int_constant' 'import' 'name' 'backend' 'fields' 'functions' 'identifier'.
 
 Rootsymbol model.
 
+value ->
+    'identifier' : extract('$1').
+value ->
+    'int_constant' : extract('$1').
 
-type ->
-    'integer' : extract('$1').
-type ->
-    'string' : extract('$1').
-type ->
-    'binary' : extract('$1').
-type ->
-    'float'  : extract('$1').
-type ->
-    'datetime' : extract('$1').
-type ->
-    'timestamp' : extract('$1').
-type ->
-    'boolean' : extract('$1').
-type ->
-    'mixed' : extract('$1').
+field_argument ->
+    'identifier' : extract('$1').
+field_argument ->
+    'identifier' 'equal' value : {extract('$1'), '$3'}.
 
-validation ->
-    type 'lparen' 'int_constant' 'rparen' : {'$1', extract('$3')}.
-validation ->
-    type 'lparen' 'rparen' : {'$1', nil}.
+field_argument_list ->
+    field_argument : ['$1'].
+field_argument_list ->
+    field_argument 'comma' field_argument_list : ['$1'] ++ '$3'.
 
-field_declaration ->
-    'identifier' : field(line('$1'), '$1', []).
-field_declaration ->
-    'identifier' 'validator' validation : field(line('$1'), '$1', '$3').
+field ->
+    'identifier' 'validator' 'identifier' 'lparen' field_argument_list 'rparen' : field('$1', '$3', '$5').
+field ->
+        'identifier' 'validator' 'identifier' 'lparen' 'rparen' : field('$1', '$3', []).
 
-field_declaration_list ->
-    field_declaration : ['$1'].
-field_declaration_list ->
-    field_declaration_list field_declaration : '$1'++['$2'].
+fields_list ->
+    field : ['$1'].
+fields_list ->
+    field fields_list : ['$1'] ++ '$2'.
 
-function_declaration_list ->
-    'identifier' : '$1'.
+backend_decl ->
+    'backend' 'colon' identifier : '$3'.
 
-name_declaration ->
-    'name' 'colon' 'identifier' : extract('$3').
-backend_declaration ->
-    'backend' 'colon' 'identifier' : extract('$3').
-fields_declaration ->
-    'fields' 'colon' field_declaration_list : '$3'.
-functions_declaration ->
-    'functions' 'colon' function_declaration_list : '$3'.
+import_list ->
+    'identifier' : [extract_val_line('$1')].
+import_list ->
+    'identifier' 'comma' import_list : [extract_val_line('$1')]++'$3'.
 
 model ->
-    name_declaration backend_declaration fields_declaration : model('$1', '$2', '$3', []).
+    'import' 'colon' import_list 'name' 'colon' 'identifier' backend_decl 'fields' 'colon' fields_list : model('$3', '$6', '$7', '$10', []).
+model ->
+    'name' 'colon' 'identifier' backend_decl 'fields' 'colon' fields_list : model([], '$3', '$4', '$7', []).
 
 
 Erlang code.
@@ -72,18 +62,27 @@ extract({int_constant, Value, _TokenLine}) ->
 extract({'identifier', Ident, _TokenLine, _TokenLen}) ->
     Ident.
 
+extract_val_line(Value = {_,_}) ->
+    Value;
+extract_val_line({int_constant, Value, TokenLine}) ->
+    {Value, TokenLine};
+extract_val_line({'identifier', Value, TokenLine, _TokenLen}) ->
+    {Value, TokenLine}.
 
-model(Name, Backend, Fields, Functions) ->
+
+model(Imports, Name, Backend, Fields, Functions) ->
     #'MODEL'{
-       name = Name,
-       backend = Backend,
+       imports = Imports,
+       name = extract_val_line(Name),
+       backend = extract_val_line(Backend),
        fields = Fields,
        functions = Functions
       }.
 
-field(Line, Fieldname, Validator) ->
+field({'identifier', Fieldname, Line, _Len}, Type, Arguments) ->
     #'FIELD'{
        name = Fieldname,
-       validator = Validator,
+       type = extract(Type),
+       arguments = Arguments,
        line = Line
       }.

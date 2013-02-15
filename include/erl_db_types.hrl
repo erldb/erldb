@@ -1,4 +1,5 @@
 -record('MODEL', {
+          imports,
           name,
           backend,
           fields,
@@ -7,6 +8,7 @@
 
 -record('FIELD', {
           name,
-          validator,
+          type,
+          arguments,
           line
          }).
