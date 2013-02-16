@@ -24,10 +24,10 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-    {ok, Pools} = application:get_env(erl_db, pools),
-    PoolSpecs = lists:map(fun({Name, SizeArgs, WorkerArgs}) ->
+    {ok, Pools} = application:get_env(erl_db, db_pools),
+    PoolSpecs = lists:map(fun({Name, Type, SizeArgs, WorkerArgs}) ->
         PoolArgs = [{name, {local, Name}},
-                    {worker_module, erl_db_worker}] ++ SizeArgs,
+                    {worker_module, Type}] ++ SizeArgs,
         poolboy:child_spec(Name, PoolArgs, WorkerArgs)
     end, Pools),
     {ok, {{one_for_one, 10, 10}, PoolSpecs}}.
