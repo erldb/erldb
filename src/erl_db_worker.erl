@@ -16,10 +16,12 @@ init(_Args) ->
     io:format("init... ~n"),
     {ok, #state{conn=ok}}.
 
-handle_call({squery, Sql}, _From, #state{conn=Conn}=State) ->
+handle_call(info, _From, #state{conn=Conn}=State) ->
+    {reply, mnesia:info(), State};
+handle_call({create_table, Fields}, _From, #state{conn=Conn}=State) ->
     {reply, io:format("Sql: ~p~n", [Sql]), State};
-handle_call(_Request, _From, State) ->
-    {reply, ok, State}.
+handle_call(Request, _From, State) ->
+    {reply, io:format("Request: ~p~n", [Request]), State}.
 
 handle_cast(_Msg, State) ->
     {noreply, State}.

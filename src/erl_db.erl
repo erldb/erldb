@@ -1,10 +1,10 @@
 -module(erl_db).
 
--export([squery/2]).
+-export([info/1]).
 
-squery(PoolName, Sql) ->
+info(PoolName) ->
     poolboy:transaction(PoolName, fun(Worker) ->
-        gen_server:call(Worker, {squery, Sql})
+        gen_server:call(Worker, info)
     end).
 
 
