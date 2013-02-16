@@ -4,7 +4,7 @@
          find/2,
          delete/2,
          save/1,
-         create_table/2]).
+         create_table/1]).
 
 info(Model) ->
     PoolName = Model:backend(),
