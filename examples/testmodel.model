@@ -7,6 +7,7 @@ backend: mnesia
 
 fields:
     id :: primary_key(auto_increment)
-    title :: string(not_null, max_size=255)
+    title :: string(max_length = 255)
+    author :: string(max_length = 100)
+    created :: datetime()
     text :: string()
-    author :: foreign_key(users)
