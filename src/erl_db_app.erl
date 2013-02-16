@@ -10,6 +10,7 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
+    application:start(mnesia),
     erl_db_sup:start_link().
 
 stop(_State) ->
