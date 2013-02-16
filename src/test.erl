@@ -18,4 +18,4 @@ create(File) ->
 	Str = erlang:binary_to_list(BinStr),
 	{ok, Tokens, _Len} = erl_db_lex:string(Str),
     {ok, ST} = erl_db_parser:parse(Tokens),
-    erl_db_creator:create(ST).
+    erl_db_compiler:compile(ST).
