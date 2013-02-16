@@ -7,7 +7,6 @@ info(PoolName) ->
         gen_server:call(Worker, info)
     end).
 
-
 find(Model, Id) ->
     Poolname = Model:backend(),
     poolboy:transaction(Poolname, fun(Worker) ->
@@ -25,3 +24,9 @@ save(Model) when is_tuple(Model) ->
     poolboy:transaction(Poolname, fun(Worker) ->
                                           gen_server:call(Worker, {save, Model})
                                   end).
+
+create_table(PoolName, Model) ->
+    poolboy:transaction(PoolName,
+                        fun(Worker) ->
+                                gen_server:call(Worker, {create_table, Model})
+                        end).
