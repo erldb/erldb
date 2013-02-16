@@ -5,10 +5,18 @@
 -define(PATH, "examples/").
 
 model(_,_) ->
-    {ok, Filenames} = file:list_dir("examples"),
+    {ok, Filenames} = find_models(),
     code:add_path("ebin"),
     rebar_log:log(info, "Files: ~p~n", [Filenames]),
     compile_models(Filenames, []).
+
+find_models() ->
+    case file:list_dir("examples") of
+	{ok, FileNames} ->
+	    {ok, FileNames};
+	_ ->
+	    {ok, []}
+    end.
 
 compile_models([], Acc) ->
     rebar_log:log(info, "Done...~n", []);
