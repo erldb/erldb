@@ -85,7 +85,7 @@ compile(#'MODEL'{imports = Imports, name = {Name, NameLine}, backend = {Backend,
 
     CompileAST = erl_syntax:attribute(erl_syntax:atom(compile), [erl_syntax:atom("export_all")]),
 
-    Forms = [ erl_syntax:revert(AST) || AST <- [ModuleAST, CompileAST, FunctionRecordAST, NewFunctionAST, Fieldsfunction1AST, FieldsfunctionAST] ++ GettersAST ++ SettersAST ],
+    Forms = [ erl_syntax:revert(AST) || AST <- [ModuleAST, CompileAST, FunctionRecordAST, NewFunctionAST, FieldsfunctionAST] ++ GettersAST ++ SettersAST ],
 
     case compile:forms(Forms) of
         {ok,ModuleName,Binary} ->
