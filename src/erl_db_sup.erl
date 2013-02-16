@@ -24,8 +24,7 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-    {ok, Pools} = application:get_env(erl_db, pools),
-    io:format("Pools: ~p~n", [Pools]),
+    {ok, Pools} = application:get_env(erl_db, db_pools),
     PoolSpecs = lists:map(fun({Name, Type, SizeArgs, WorkerArgs}) ->
         PoolArgs = [{name, {local, Name}},
                     {worker_module, Type}] ++ SizeArgs,
