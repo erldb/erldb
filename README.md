@@ -12,9 +12,32 @@ Check the file 'test.erl' inside the src-directory
 Usage:
 ----------
 
-        rebar compile model
+This is the example model that is in examples directory:
+
+     import: users, tags
+
+     name: blog_entry
+     backend: mnesia
+
+     /* This is a test comment */
+
+     fields:
+        id :: primary_key(auto_increment)
+        title :: string(max_length = 255, index)
+        author :: string(max_length = 100)
+        created :: datetime()
+        text :: string()
+
+
+To get your workers they are stored as deps in rebar.config in our config we have a mnesia worker.
+
+        rebar get-deps
 
 To compile your code and to compile your models.
+
+        rebar compile model
+
+Then start a shell (I did it with erl -pa ebin -pa deps/*/ebin)
 
         Eshell V5.9.2  (abort with ^G)
         1> application:start(erl_db).
@@ -22,4 +45,11 @@ To compile your code and to compile your models.
         21:41:44.951 [info] Application mnesia started on node nonode@nohost
         21:41:44.951 [info] Application erl_db started on node nonode@nohost
         ok
-        2>
+        2> FirstEntry = blog_entry:new(1, "My title", "Mr Imsobad", now(), "This is my first blog entry. And it is stored in mnesia. Hope I don't forget that").
+{blog_entry,1,"My title","Mr Imsobad",
+            {1361,393556,541209},
+            "This is my first blog entry. And it is stored in mnesia. Hope I don't forget that"}
+        3> erl_db:create_table(blog_entry).
+        {atomic,ok}
+        4> erl_db:save(FirstEntry).
+        5> erl_db:find(blog_entry, 1).
