@@ -9,8 +9,17 @@ Check the file 'test.erl' inside the src-directory
 
 ## Compile
 
-To compile use rebar:
+Usage:
+----------
 
-compile will compile the code that are in deps and src.
+        rebar compile model
 
-model will activate the plugin and compile models that are in example directory. (In the future it should be configurable)
+To compile your code and to compile your models.
+
+        Eshell V5.9.2  (abort with ^G)
+        1> application:start(erl_db).
+        21:41:44.883 [info] Application lager started on node nonode@nohost
+        21:41:44.951 [info] Application mnesia started on node nonode@nohost
+        21:41:44.951 [info] Application erl_db started on node nonode@nohost
+        ok
+        2>
