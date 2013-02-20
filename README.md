@@ -43,10 +43,16 @@ Then start a shell (I did it with erl -pa ebin -pa deps/*/ebin)
         21:41:44.951 [info] Application mnesia started on node nonode@nohost
         21:41:44.951 [info] Application erl_db started on node nonode@nohost
         ok
+
+Here you will see that mnesia is started. It is started in the worker so now we know that the worker is loaded. (Maybe we should say something like a log message)
+
         2> FirstEntry = blog_entry:new(1, "My title", "Mr Imsobad", now(), "This is my first blog entry. And it is stored in mnesia. Hope I don't forget that").
         {blog_entry,1,"My title","Mr Imsobad",
                           {1361,393556,541209},
                           "This is my first blog entry. And it is stored in mnesia. Hope I don't forget that"}
+
+This is our first entry in our blog, now we will try to store it.
+
         3> erl_db:create_table(blog_entry).
         {atomic,ok}
         4> erl_db:save(FirstEntry).
