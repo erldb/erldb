@@ -4,13 +4,7 @@ ORM (Object-relational mapping) application implemented in Erlang.
 # Model files
 Check 'testmodel.model' in the examples/ directory
 
-# Usage
-Check the file 'test.erl' inside the src-directory
-
-## Compile
-
-Usage:
-----------
+#Usage:
 
 This is the example model that is in examples directory:
 
