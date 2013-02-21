@@ -1,19 +1,11 @@
 -module(erl_db).
 
--export([info/1,
-         find/2,
+-export([find/2,
          delete/2,
          save/1,
          create_table/1]).
 
-info(Model) ->
-    PoolName = Model:backend(),
-    poolboy:transaction(PoolName, fun(Worker) ->
-        gen_server:call(Worker, info)
-    end).
-
 find(Model, Id) ->
-    erl_db_log:msg(error, "test~n", []),
     Poolname = Model:backend(),
     poolboy:transaction(Poolname, fun(Worker) ->
                                           gen_server:call(Worker, {find, Model, Id})
@@ -36,4 +28,11 @@ create_table(Model) ->
     poolboy:transaction(PoolName,
                         fun(Worker) ->
                                 gen_server:call(Worker, {create_table, Model})
+                        end).
+
+transaction(Model) ->
+    PoolName = Model:backend(),
+    poolboy:transaction(PoolName,
+                        fun(Worker) ->
+                                gen_server:call(Worker, {transaction, Model})
                         end).
