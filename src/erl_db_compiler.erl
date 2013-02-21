@@ -92,8 +92,11 @@ compile(#'MODEL'{imports = Imports, name = {Name, NameLine}, backend = {Backend,
             FileName = atom_to_list(ModuleName) ++ ".beam",
             file:write_file(FileName, Binary),
             {ok, FileName};
-        {ok,ModuleName,Binary,_Warnings} ->
+        {ok,ModuleName,Binary,Warnings} ->
+            erl_db_log:msg(warning, "Compiled ~p with warnings: ~p", [ModuleName, Warnings]),
             FileName = atom_to_list(ModuleName) ++ ".beam",
             file:write_file(FileName, Binary),
-            {ok, FileName}
+            {ok, FileName};
+        {error, Errors, _Warnings} ->
+            erl_db_log:msg(error, "Could not compile model: ~p. Exited with errors: ~p~n", [Errors])
     end.
