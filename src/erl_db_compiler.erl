@@ -64,17 +64,21 @@ create_new_function(ModuleName, Fields) ->
                   erl_syntax:record_field(erl_syntax:atom(Name), erl_syntax:variable(atom_to_var(Name)))
           end,
           Fields),
-
     erl_db_creator_helpers:function("new", Args, none, [erl_syntax:record_expr(none, erl_syntax:atom(ModuleName), FieldSetters)]).
 
 
-compile(#'MODEL'{imports = Imports, name = {Name, NameLine}, backend = {Backend, BackendLine}, fields = Fields, functions = Functions}) ->
+compile(#'MODEL'{imports = Imports, name = {Name, _NameLine}, backend = {Backend, _BackendLine}, fields = Fields, functions = Functions}) ->
     ModuleAST = erl_db_creator_helpers:module(Name),
-    BackendGetFunctionAST = erl_db_creator_helpers:function("backend", [], none, [erl_syntax:atom(Backend)]),
+    BackendGetFunctionAST =
+        erl_db_creator_helpers:function("backend", [], none, [erl_syntax:atom(Backend)]),
+    BackendGetFunction1AST =
+        erl_db_creator_helpers:function("backend", [erl_syntax:underscore()], none, [erl_syntax:atom(Backend)]),
 
-    FieldsfunctionAST = erl_db_creator_helpers:function("fields", [], none, [erl_db_creator_helpers:proplist_from_fields(Fields)]),
-    %%Fieldsfunction2AST = erl_db_creator_helpers:function("fields", [erl_syntax:underscore()], none, [erl_db_creator_helpers:proplist_from_fields(Fields)]),
+    FieldsfunctionAST =
+        erl_db_creator_helpers:function("fields", [], none, [erl_db_creator_helpers:proplist_from_fields(Fields)]),
 
+    Fieldsfunction2AST =
+        erl_db_creator_helpers:function("fields", [erl_syntax:underscore()], none, [erl_db_creator_helpers:proplist_from_fields(Fields)]),
 
     GettersAST = [ getter_ast(Name, Field) || Field <- Fields ],
     SettersAST = [ setter_ast(Name, Field) || Field <- Fields ],
@@ -85,7 +89,7 @@ compile(#'MODEL'{imports = Imports, name = {Name, NameLine}, backend = {Backend,
 
     CompileAST = erl_syntax:attribute(erl_syntax:atom(compile), [erl_syntax:atom("export_all")]),
 
-    Forms = [ erl_syntax:revert(AST) || AST <- [ModuleAST, CompileAST, FunctionRecordAST, BackendGetFunctionAST, NewFunctionAST, FieldsfunctionAST] ++ GettersAST ++ SettersAST ],
+    Forms = [ erl_syntax:revert(AST) || AST <- [ModuleAST, CompileAST, FunctionRecordAST, BackendGetFunctionAST, BackendGetFunction1AST, NewFunctionAST, FieldsfunctionAST, Fieldsfunction2AST] ++ GettersAST ++ SettersAST ],
 
     case compile:forms(Forms) of
         {ok,ModuleName,Binary} ->
