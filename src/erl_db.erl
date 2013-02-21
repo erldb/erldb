@@ -6,7 +6,6 @@
          create_table/1]).
 
 find(Model, Id) ->
-    erl_db_log:msg(error, "test~n", []),
     Poolname = Model:backend(),
     poolboy:transaction(Poolname, fun(Worker) ->
                                           gen_server:call(Worker, {find, Model, Id})
