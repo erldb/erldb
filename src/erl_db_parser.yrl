@@ -1,18 +1,20 @@
 Nonterminals value field_argument field_argument_list field fields_list backend_decl import_list model.
 
-Terminals 'validator' 'colon' 'lparen' 'rparen' 'equal' 'comma' 'int_constant' 'import' 'name' 'backend' 'fields' 'functions' 'identifier'.
+Terminals 'validator' 'colon' 'dot' 'lparen' 'rparen' 'equal' 'comma' 'int_constant' 'import' 'name' 'backend' 'fields' 'functions' 'identifier'.
 
 Rootsymbol model.
 
 value ->
-    'identifier' : extract('$1').
+    'identifier' : '$1'.
 value ->
-    'int_constant' : extract('$1').
+    'int_constant' : '$1'.
 
 field_argument ->
-    'identifier' : extract('$1').
+    'identifier' 'dot' 'identifier' : {model_field, {'$1', '$3'}}.
 field_argument ->
-    'identifier' 'equal' value : {extract('$1'), '$3'}.
+    'identifier' : '$1'.
+field_argument ->
+    'identifier' 'equal' value : {'$1', '$3'}.
 
 field_argument_list ->
     field_argument : ['$1'].
@@ -30,12 +32,14 @@ fields_list ->
     field fields_list : ['$1'] ++ '$2'.
 
 backend_decl ->
-    'backend' 'colon' identifier : '$3'.
+    'backend' 'colon' identifier : backend('$3', nil).
+backend_decl ->
+    'backend' 'colon' identifier 'lparen' field_argument_list 'rparen' : backend('$3', '$5').
 
 import_list ->
-    'identifier' : [extract_val_line('$1')].
+    'identifier' : [import('$1')].
 import_list ->
-    'identifier' 'comma' import_list : [extract_val_line('$1')]++'$3'.
+    'identifier' 'comma' import_list : [import('$1')]++'$3'.
 
 model ->
     'import' 'colon' import_list 'name' 'colon' 'identifier' backend_decl 'fields' 'colon' fields_list : model('$3', '$6', '$7', '$10', []).
@@ -47,42 +51,29 @@ Erlang code.
 -include("../include/erl_db_types.hrl").
 -export([]).
 
-
-line({_Type, Line}) ->
-    Line;
-line({_Type, _Str, Line, _Len}) ->
-    Line;
-line(_) ->
-    0.
-
-extract({Value, _TokenLine}) ->
-    Value;
-extract({int_constant, Value, _TokenLine}) ->
-    Value;
-extract({'identifier', Ident, _TokenLine, _TokenLen}) ->
-    Ident.
-
-extract_val_line(Value = {_,_}) ->
-    Value;
-extract_val_line({int_constant, Value, TokenLine}) ->
-    {Value, TokenLine};
-extract_val_line({'identifier', Value, TokenLine, _TokenLen}) ->
-    {Value, TokenLine}.
-
-
 model(Imports, Name, Backend, Fields, Functions) ->
     #'MODEL'{
        imports = Imports,
-       name = extract_val_line(Name),
-       backend = extract_val_line(Backend),
+       name = Name,
+       backend = Backend,
        fields = Fields,
        functions = Functions
       }.
 
-field({'identifier', Fieldname, Line, _Len}, Type, Arguments) ->
+backend(Name, Arguments) ->
+    #'BACKEND'{
+         name = Name,
+         arguments = Arguments
+        }.
+
+import(Identifier) ->
+    #'IMPORT'{
+        model = Identifier
+       }.
+
+field(Identifier, Type, Arguments) ->
     #'FIELD'{
-       name = Fieldname,
-       type = extract(Type),
-       arguments = Arguments,
-       line = Line
+       name = Identifier,
+       type = Type,
+       arguments = Arguments
       }.
