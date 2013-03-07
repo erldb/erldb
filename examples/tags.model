@@ -1,0 +1,8 @@
+name: tags
+backend: mnesia
+
+/* This is a test comment */
+
+fields:
+    id :: primary_key(auto_increment)
+    tag :: string(max_length = 255, index)
