@@ -1,0 +1,13 @@
+name: blog_entry
+backend: mnesia(
+                schema = erl_db,
+                table = my_blog_entry
+                )
+
+
+fields:
+    id      :: primary_key(auto_increment)
+    title   :: string(max_length = 255, index)
+    author  :: foreign_key()
+    created :: datetime()
+    text    :: string()
