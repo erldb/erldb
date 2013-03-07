@@ -6,9 +6,17 @@
           functions
          }).
 
+-record('IMPORT', {
+          model
+         }).
+
+-record('BACKEND', {
+          name,
+          arguments
+         }).
+
 -record('FIELD', {
           name,
           type,
-          arguments,
-          line
+          arguments
          }).
