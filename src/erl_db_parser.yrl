@@ -34,6 +34,8 @@ fields_list ->
 backend_decl ->
     'backend' 'colon' identifier : backend('$3', nil).
 backend_decl ->
+    'backend' 'colon' identifier 'lparen' 'rparen' : backend('$3', nil).
+backend_decl ->
     'backend' 'colon' identifier 'lparen' field_argument_list 'rparen' : backend('$3', '$5').
 
 import_list ->
