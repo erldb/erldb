@@ -46,7 +46,23 @@ parse([#'IMPORT'{model = {'identifier', Modelname, Line, _TokenLen}}|Tl], State 
 parse([#'FIELD'{name = Name, type = Type, arguments = Args}|Tl], State = #state{fields = Fields}) ->
     NameState = parse(Name, State),
     TypeState = parse(Type, State),
-    ArgsState = parse(Args, State#state{current_type = TypeState#state.current_type}),
+    ArgsState = parse(Args, TypeState),
+
+    %% Validate values of fields
+    case TypeState#state.current_type of
+        FieldType when FieldType == foreign_key; FieldType == one_to_many ->
+            case proplists:get_value(model_field, Args) of
+                undefined ->
+                    {_, Fieldname, Line, _} = Name,
+                    erl_db_log:msg(error, "No 'model.field'-argument given to field '~p' of type ~p. Line ~p", [Fieldname, FieldType, Line]),
+                    throw(foreign_key_error);
+                _ ->
+                    ok
+            end;
+        _ ->
+            ok
+    end,
+
     parse(Tl, State);
 
 %% Type definitions
