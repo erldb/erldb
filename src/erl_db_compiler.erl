@@ -18,7 +18,7 @@ parse([#'MODEL'{imports = Imports, name = Name, backend = Backend, fields = Fiel
     NameState = parse(Name, ImportState),
     BackendState = parse(Backend, NameState),
     FieldsState = parse(Fields, BackendState),
-    FunctionsState = parse(Functions, FieldsState);
+    parse(Functions, FieldsState);
 
 parse([], State) -> State;
 parse([#'BACKEND'{name = {'identifier', Backendname, Line, _TokenLen}, arguments = Arguments}|Tl], State) ->
@@ -43,10 +43,10 @@ parse([#'IMPORT'{model = {'identifier', Modelname, Line, _TokenLen}}|Tl], State 
             UpdatedImportedModels = dict:store(Modelname, Fields, ImportedModels),
             parse(Tl, State#state{imported_models = UpdatedImportedModels})
     end;
-parse([#'FIELD'{name = Name, type = Type, arguments = Args}|Tl], State = #state{fields = Fields}) ->
-    NameState = parse(Name, State),
+parse([#'FIELD'{name = Name, type = Type, arguments = Args}|Tl], State) ->
+    parse(Name, State),
     TypeState = parse(Type, State),
-    ArgsState = parse(Args, TypeState),
+    parse(Args, TypeState),
 
     %% Validate values of fields
     case TypeState#state.current_type of
@@ -114,7 +114,7 @@ parse([{model_field, {Model, Field}}|Tl], State = #state{current_type = CT, impo
             throw(model_not_imported)
     end,
     parse(Tl, State);
-parse([{model_field, {Model, _Field}}|Tl], State = #state{current_type = CT}) ->
+parse([{model_field, {Model, _Field}}|_Tl], _State) ->
     erl_db_log:msg(error, "Error on line ~p. Declaration of type model_field invalid.", [get_line_number(Model)]),
     throw(faulty_type);
 
@@ -129,7 +129,7 @@ parse(Element, State) when not is_list(Element) ->
     parse([Element], State).
 
 
-compile(Model = #'MODEL'{imports = Imports, name = Name, backend = #'BACKEND'{name = Backend, arguments = BackendArgs}, fields = Fields, functions = Functions}) ->
+compile(Model = #'MODEL'{imports = _Imports, name = Name, backend = #'BACKEND'{name = Backend, arguments = _BackendArgs}, fields = Fields, functions = _Functions}) ->
 
     %% First we need to check that the syntax tree is fine
     parse(Model, #state{}),
@@ -149,6 +149,8 @@ compile(Model = #'MODEL'{imports = Imports, name = Name, backend = #'BACKEND'{na
 
     SaveFunctionAST = save_function_ast(Name),
 
+    DeleteFunctionAST = delete_function_ast(Name),
+
     GettersAST = [ getter_ast(Name, Field) || Field <- Fields ],
     SettersAST = [ setter_ast(Name, Field) || Field <- Fields ],
 
@@ -166,7 +168,8 @@ compile(Model = #'MODEL'{imports = Imports, name = Name, backend = #'BACKEND'{na
                                                 NewFunctionAST,
                                                 FieldsfunctionAST,
                                                 Fieldsfunction2AST,
-                                                SaveFunctionAST
+                                                SaveFunctionAST,
+                                                DeleteFunctionAST
                                                ] ++ GettersAST ++ SettersAST ],
 
     case compile:forms(Forms) of
@@ -215,11 +218,6 @@ load_imports(Modelname) ->
                 undefined
         end.
 
-get_primary_key(Fields) ->
-    [ {Name, Type, Args} || {Name, Type, Args} <- Fields,
-                            Type == primary_key ].
-
-
 get_line_number({'identifier', _Ident, Line, _Len}) ->
     Line;
 get_line_number({'int_constant', _Value, Line}) ->
@@ -237,7 +235,7 @@ get_field(Key, MaybeProplist) ->
 
 get_field1(_, []) ->
     undefined;
-get_field1(Key, [Tuple = {Key, Type, Args}|Tl]) ->
+get_field1(Key, [Tuple = {Key, _Type, _Args}|_Tl]) ->
     Tuple;
 get_field1(Key, [_|Tl]) ->
     get_field1(Key, Tl).
@@ -246,7 +244,7 @@ get_backend(_, []) ->
     undefined;
 get_backend(Key, [{Key, _Module, Args, _}|_Tl]) ->
     Args;
-get_backend(Key, [Element|Tl]) ->
+get_backend(Key, [_Element|Tl]) ->
     get_backend(Key, Tl).
 
 
@@ -308,6 +306,17 @@ module_ast({identifier, Modulename, _TokenLine, _TokenLength}) ->
     erl_syntax:attribute(erl_syntax:atom(module),
                          [erl_syntax:atom(Modulename)]).
 
+
+delete_function_ast({identifier, Modulename, _, _}) ->
+    function_ast(delete, [erl_syntax:variable(atom_to_var(Modulename))], none,
+                 [
+                  erl_syntax:application(
+                    erl_syntax:atom(erl_db),
+                    erl_syntax:atom(delete),
+                    [
+                     erl_syntax:variable(atom_to_var(Modulename))
+                    ]
+                   )]).
 
 save_function_ast({identifier, Modulename, _, _}) ->
     function_ast(save, [erl_syntax:variable(atom_to_var(Modulename))], none,
