@@ -1,6 +1,7 @@
 Definitions.
 HiddenChars = ((\n)|(\r)|(\t)|(\s)|(\f))
 Identifier  = ([a-zA-Z]+[_a-zA-Z0-9]*)
+EscapedIdentifier = ('[a-zA-Z]+[_a-zA-Z0-9]*')
 
 Rules.
 
@@ -18,6 +19,14 @@ backend        : {token, {'backend', TokenLine}}.
 fields         : {token, {'fields', TokenLine}}.
 functions      : {token, {'functions', TokenLine}}.
 {Identifier}   : {token, {'identifier', list_to_atom(TokenChars), TokenLine, TokenLen}}.
+{EscapedIdentifier} : {token, {'identifier', list_to_atom(remove_escapes(TokenChars)), TokenLine, TokenLen}}.
 {HiddenChars}+ : skip_token.
 
 Erlang code.
+
+remove_escapes([]) ->
+    [];
+remove_escapes([$'|Tl]) ->
+    remove_escapes(Tl);
+remove_escapes([Hd|Tl]) ->
+    [Hd|remove_escapes(Tl)].
