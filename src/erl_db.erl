@@ -11,6 +11,12 @@ find(Model, Id) ->
                                           gen_server:call(Worker, {find, Model, Id})
                                   end).
 
+delete(Model) when is_tuple(Model) ->
+    Poolname = Model:backend(),
+    poolboy:transaction(Poolname, fun(Worker) ->
+                                          gen_server:call(Worker, {delete, Model})
+                                  end).
+
 delete(Model, Id) when is_tuple(Model) ->
     Poolname = Model:backend(),
     poolboy:transaction(Poolname, fun(Worker) ->
