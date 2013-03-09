@@ -1,0 +1,9 @@
+name: user
+backend: mnesia(
+                schema = erl_db
+         )
+
+fields:
+        id      :: primary_key(auto_increment)
+        'name'  :: string()
+        created :: datetime()
