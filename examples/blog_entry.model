@@ -1,6 +1,6 @@
-import: user
+import: blog_user
 name: blog_entry
-backend: mnesia(
+backend: postgres(
                 schema = erl_db,
                 table = my_blog_entry
                 )
@@ -9,6 +9,6 @@ backend: mnesia(
 fields:
     id      :: primary_key(auto_increment)
     title   :: string(max_length = 255, index)
-    author  :: one_to_many(user.id)
+    author  :: one_to_many(blog_user.id)
     created :: datetime()
     text    :: string()
