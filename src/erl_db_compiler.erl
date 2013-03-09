@@ -40,7 +40,7 @@ parse([#'IMPORT'{model = {'identifier', Modelname, Line, _TokenLen}}|Tl], State 
             erl_db_log:msg(error, "Could not find the model '~p' declared on line ~p", [Modelname, Line]),
             throw(model_not_found);
         Fields ->
-            UpdatedImportedModels = dict:store(Modelname, Fields),
+            UpdatedImportedModels = dict:store(Modelname, Fields, ImportedModels),
             parse(Tl, State#state{imported_models = UpdatedImportedModels})
     end;
 parse([#'FIELD'{name = Name, type = Type, arguments = Args}|Tl], State = #state{fields = Fields}) ->
@@ -102,9 +102,9 @@ parse([{model_field, {Model, Field}}|Tl], State = #state{current_type = CT, impo
 
     case dict:find(Modelname, IM) of
         {ok, Fields} ->
-            case proplists:get_value(Fieldname, Fields) of
+            case get_field(Fieldname, Fields) of
                 undefined ->
-                    erl_db_log:msg(error, "Field ~p not found in target model ~p. Check your spelling and ensure that the given field exists. Line ~p.", [Fieldname, Modelname, Line]),
+                    erl_db_log:msg(error, "Field '~p' not found in target model '~p'. Check your spelling and ensure that the given field exists. Line ~p.", [Fieldname, Modelname, Line]),
                     throw(field_not_found);
                 _Field ->
                     ok
@@ -117,6 +117,9 @@ parse([{model_field, {Model, Field}}|Tl], State = #state{current_type = CT, impo
 parse([{model_field, {Model, _Field}}|Tl], State = #state{current_type = CT}) ->
     erl_db_log:msg(error, "Error on line ~p. Declaration of type model_field invalid.", [get_line_number(Model)]),
     throw(faulty_type);
+
+parse([nil|Tl], State) ->
+    parse(Tl, State);
 
 parse([{_Key, _Value}|Tl], State) ->
     parse(Tl, State);
@@ -144,6 +147,8 @@ compile(Model = #'MODEL'{imports = Imports, name = Name, backend = #'BACKEND'{na
     Fieldsfunction2AST =
         function_ast("fields", [erl_syntax:underscore()], none, [proplist_from_fields(Fields)]),
 
+    SaveFunctionAST = save_function_ast(Name),
+
     GettersAST = [ getter_ast(Name, Field) || Field <- Fields ],
     SettersAST = [ setter_ast(Name, Field) || Field <- Fields ],
 
@@ -153,7 +158,16 @@ compile(Model = #'MODEL'{imports = Imports, name = Name, backend = #'BACKEND'{na
 
     CompileAST = erl_syntax:attribute(erl_syntax:atom(compile), [erl_syntax:atom("export_all")]),
 
-    Forms = [ erl_syntax:revert(AST) || AST <- [ModuleAST, CompileAST, FunctionRecordAST, BackendGetFunctionAST, BackendGetFunction1AST, NewFunctionAST, FieldsfunctionAST, Fieldsfunction2AST] ++ GettersAST ++ SettersAST ],
+    Forms = [ erl_syntax:revert(AST) || AST <- [ModuleAST,
+                                                CompileAST,
+                                                FunctionRecordAST,
+                                                BackendGetFunctionAST,
+                                                BackendGetFunction1AST,
+                                                NewFunctionAST,
+                                                FieldsfunctionAST,
+                                                Fieldsfunction2AST,
+                                                SaveFunctionAST
+                                               ] ++ GettersAST ++ SettersAST ],
 
     case compile:forms(Forms) of
         {ok,ModuleName,Binary} ->
@@ -165,6 +179,8 @@ compile(Model = #'MODEL'{imports = Imports, name = Name, backend = #'BACKEND'{na
             FileName = atom_to_list(ModuleName) ++ ".beam",
             file:write_file(FileName, Binary),
             {ok, FileName};
+        {error, Reason} ->
+            erl_db_log:msg(error, "Error in compilation: ~p", [Reason]);
         {error, Errors, _Warnings} ->
             erl_db_log:msg(error, "Could not compile model: ~p. Exited with errors: ~p~n", [Errors])
     end.
@@ -211,6 +227,20 @@ get_line_number({'int_constant', _Value, Line}) ->
 get_line_number({_, Line}) ->
     Line.
 
+get_field(Key, MaybeProplist) ->
+    case proplists:get_value(Key, MaybeProplist) of
+        undefined ->
+            get_field1(Key, MaybeProplist);
+        Val ->
+            Val
+    end.
+
+get_field1(_, []) ->
+    undefined;
+get_field1(Key, [Tuple = {Key, Type, Args}|Tl]) ->
+    Tuple;
+get_field1(Key, [_|Tl]) ->
+    get_field1(Key, Tl).
 
 get_backend(_, []) ->
     undefined;
@@ -233,9 +263,16 @@ convert_type(Type) when is_atom(Type) ->
     erl_syntax:atom(Type);
 convert_type(Type) when is_integer(Type) ->
     erl_syntax:integer(Type);
-convert_type(_) ->
+convert_type({Model, Field}) ->
+    erl_syntax:tuple([erl_syntax:atom("model_field"),
+                      erl_syntax:tuple([
+                                        erl_syntax:atom(extract(Model)),
+                                        erl_syntax:atom(extract(Field))
+                                        ])
+                      ]);
+convert_type(Type) ->
+    erl_db_log:msg(error, "Unknown type: ~p. Line ~p", [Type, get_line_number(Type)]),
     {error, unknown_type}.
-
 
 convert_argument([]) -> [];
 convert_argument([{Key, Val}|Tl]) ->
@@ -272,15 +309,27 @@ module_ast({identifier, Modulename, _TokenLine, _TokenLength}) ->
                          [erl_syntax:atom(Modulename)]).
 
 
+save_function_ast({identifier, Modulename, _, _}) ->
+    function_ast(save, [erl_syntax:variable(atom_to_var(Modulename))], none,
+                 [
+                  erl_syntax:application(
+                    erl_syntax:atom(erl_db),
+                    erl_syntax:atom(save),
+                    [
+                     erl_syntax:variable(atom_to_var(Modulename))
+                    ]
+                   )]).
+
 function_ast({identifier, Name, _, _}, Arguments, Guards, Body) ->
     function_ast(Name, Arguments, Guards, Body);
+
 function_ast(Functionname, Arguments, Guards, Body) ->
     erl_syntax:function(erl_syntax:atom(Functionname),
                         [erl_syntax:clause(
                            Arguments, Guards,
                            Body)]).
 
-getter_ast(Modulename, #'FIELD'{name = FunctionName, type = foreign_key, arguments = Args}) ->
+getter_ast(Modulename, #'FIELD'{name = FunctionName, type = Mapper, arguments = Args}) when Mapper == foreign_key; Mapper == one_to_many ->
     ListArgs = [ extract(X) || X <- Args ],
     case proplists:get_value(target, ListArgs) of
         {error, _Reason} ->
