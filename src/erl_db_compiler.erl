@@ -2,7 +2,7 @@
 
 -include("../include/erl_db_types.hrl").
 
--export([compile/1]).
+-export([compile/1, compile/2]).
 
 -record(state, {
           current_type,
@@ -23,7 +23,7 @@ parse([#'MODEL'{imports = Imports, name = Name, backend = Backend, fields = Fiel
 parse([], State) -> State;
 parse([#'BACKEND'{name = {'identifier', Backendname, Line, _TokenLen}, arguments = Arguments}|Tl], State) ->
     %% Control that the backend config is defined
-    {ok, ConfigBackends} = application:get_env(erl_db, db_pools),
+    ConfigBackends = get_env(erl_db, db_pools, []),
     case get_backend(Backendname, ConfigBackends) of
         undefined ->
             erl_db_log:msg(error, "Could not find the specified backend-config. Declared as ~p on line ~p", [Backendname, Line]),
@@ -128,8 +128,16 @@ parse([_Value|Tl], State) ->
 parse(Element, State) when not is_list(Element) ->
     parse([Element], State).
 
+compile(Filename) ->
+    compile(Filename, []).
 
-compile(Model = #'MODEL'{imports = _Imports, name = Name, backend = #'BACKEND'{name = Backend, arguments = _BackendArgs}, fields = Fields, functions = _Functions}) ->
+compile(Filename, Options) ->
+    {ok, BinStr} = file:read_file(Filename),
+    Str = erlang:binary_to_list(BinStr),
+    {ok, Tokens, _Len} = erl_db_lex:string(Str),
+    {ok, Model} = erl_db_parser:parse(Tokens),
+
+    #'MODEL'{imports = _Imports, name = Name, backend = #'BACKEND'{name = Backend, arguments = _BackendArgs}, fields = Fields, functions = _Functions} = Model,
 
     %% First we need to check that the syntax tree is fine
     parse(Model, #state{}),
@@ -172,16 +180,19 @@ compile(Model = #'MODEL'{imports = _Imports, name = Name, backend = #'BACKEND'{n
                                                 DeleteFunctionAST
                                                ] ++ GettersAST ++ SettersAST ],
 
+    OutDir = proplists:get_value(out_dir, Options, "."),
     case compile:forms(Forms) of
         {ok,ModuleName,Binary} ->
-            FileName = atom_to_list(ModuleName) ++ ".beam",
-            file:write_file(FileName, Binary),
-            {ok, FileName};
+            BeamFilename = filename:join([OutDir, atom_to_list(ModuleName) ++ ".beam"]),
+            erl_db_log:msg(info, "Compiled model at: ~p", [BeamFilename]),
+            file:write_file(BeamFilename, Binary),
+            {ok, BeamFilename};
         {ok,ModuleName,Binary,Warnings} ->
             erl_db_log:msg(warning, "Compiled ~p with warnings: ~p", [ModuleName, Warnings]),
-            FileName = atom_to_list(ModuleName) ++ ".beam",
-            file:write_file(FileName, Binary),
-            {ok, FileName};
+            BeamFilename = filename:join([OutDir, atom_to_list(ModuleName) ++ ".beam"]),
+            erl_db_log:msg(info, "Compiled model at: ~p", [BeamFilename]),
+            file:write_file(BeamFilename, Binary),
+            {ok, BeamFilename};
         {error, Reason} ->
             erl_db_log:msg(error, "Error in compilation: ~p", [Reason]);
         {error, Errors, _Warnings} ->
@@ -394,3 +405,18 @@ new_function_ast({identifier, ModuleName, _, _}, Fields) ->
           Fields),
 
     function_ast("new", Args, none, [erl_syntax:record_expr(none, erl_syntax:atom(ModuleName), FieldSetters)]).
+
+
+
+get_env(Application, Key, Default) ->
+    case code:is_loaded(boss_env) of
+        false ->
+            case application:get_env(Application, Key) of
+                {ok, Value} ->
+                    Value;
+                _ ->
+                    Default
+            end;
+        _ ->
+            boss_env:get_env(Key, Default)
+    end.
