@@ -154,10 +154,7 @@ compile(Filename, Options) ->
                 function_ast("backend", [erl_syntax:underscore()], none, [erl_syntax:atom(extract(Backend))]),
 
             FieldsfunctionAST =
-                function_ast("fields", [], none, [proplist_from_fields(Fields)]),
-
-            Fieldsfunction2AST =
-                function_ast("fields", [erl_syntax:underscore()], none, [proplist_from_fields(Fields)]),
+                erl_syntax:attribute(erl_syntax:atom(fields), [proplist_from_fields(Fields)]),
 
             SaveFunctionAST = save_function_ast(Name),
 
@@ -174,12 +171,11 @@ compile(Filename, Options) ->
 
             Forms = [ erl_syntax:revert(AST) || AST <- [ModuleAST,
                                                         CompileAST,
+                                                        FieldsfunctionAST,
                                                         FunctionRecordAST,
                                                         BackendGetFunctionAST,
                                                         BackendGetFunction1AST,
                                                         NewFunctionAST,
-                                                        FieldsfunctionAST,
-                                                        Fieldsfunction2AST,
                                                         SaveFunctionAST,
                                                         DeleteFunctionAST
                                                        ] ++ GettersAST ++ SettersAST ],
