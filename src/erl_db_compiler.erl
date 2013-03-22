@@ -23,7 +23,7 @@ parse([#'MODEL'{imports = Imports, name = Name, backend = Backend, fields = Fiel
 parse([], State) -> State;
 parse([#'BACKEND'{name = {'identifier', Backendname, Line, _TokenLen}, arguments = Arguments}|Tl], State) ->
     %% Control that the backend config is defined
-    ConfigBackends = get_env(erl_db, db_pools, []),
+    ConfigBackends = erl_db_env:get_env(erl_db, db_pools, []),
     case get_backend(Backendname, ConfigBackends) of
         undefined ->
             erl_db_log:msg(error, "Could not find the specified backend-config. Declared as ~p on line ~p", [Backendname, Line]),
@@ -132,71 +132,76 @@ compile(Filename) ->
     compile(Filename, []).
 
 compile(Filename, Options) ->
-    {ok, BinStr} = file:read_file(Filename),
-    Str = erlang:binary_to_list(BinStr),
-    {ok, Tokens, _Len} = erl_db_lex:string(Str),
-    {ok, Model} = erl_db_parser:parse(Tokens),
-
-    #'MODEL'{imports = _Imports, name = Name, backend = #'BACKEND'{name = Backend, arguments = _BackendArgs}, fields = Fields, functions = _Functions} = Model,
-
-    %% First we need to check that the syntax tree is fine
-    parse(Model, #state{}),
-
-    ModuleAST = module_ast(Name),
-
-    BackendGetFunctionAST =
-        function_ast("backend", [], none, [erl_syntax:atom(extract(Backend))]),
-    BackendGetFunction1AST =
-        function_ast("backend", [erl_syntax:underscore()], none, [erl_syntax:atom(extract(Backend))]),
-
-    FieldsfunctionAST =
-        function_ast("fields", [], none, [proplist_from_fields(Fields)]),
-
-    Fieldsfunction2AST =
-        function_ast("fields", [erl_syntax:underscore()], none, [proplist_from_fields(Fields)]),
-
-    SaveFunctionAST = save_function_ast(Name),
-
-    DeleteFunctionAST = delete_function_ast(Name),
-
-    GettersAST = [ getter_ast(Name, Field) || Field <- Fields ],
-    SettersAST = [ setter_ast(Name, Field) || Field <- Fields ],
-
-    NewFunctionAST = new_function_ast(Name, Fields),
-
-    FunctionRecordAST = create_record_from_fields(Name, Fields),
-
-    CompileAST = erl_syntax:attribute(erl_syntax:atom(compile), [erl_syntax:atom("export_all")]),
-
-    Forms = [ erl_syntax:revert(AST) || AST <- [ModuleAST,
-                                                CompileAST,
-                                                FunctionRecordAST,
-                                                BackendGetFunctionAST,
-                                                BackendGetFunction1AST,
-                                                NewFunctionAST,
-                                                FieldsfunctionAST,
-                                                Fieldsfunction2AST,
-                                                SaveFunctionAST,
-                                                DeleteFunctionAST
-                                               ] ++ GettersAST ++ SettersAST ],
-
-    OutDir = proplists:get_value(out_dir, Options, "."),
-    case compile:forms(Forms) of
-        {ok,ModuleName,Binary} ->
-            BeamFilename = filename:join([OutDir, atom_to_list(ModuleName) ++ ".beam"]),
-            erl_db_log:msg(info, "Compiled model at: ~p", [BeamFilename]),
-            file:write_file(BeamFilename, Binary),
-            {ok, BeamFilename};
-        {ok,ModuleName,Binary,Warnings} ->
-            erl_db_log:msg(warning, "Compiled ~p with warnings: ~p", [ModuleName, Warnings]),
-            BeamFilename = filename:join([OutDir, atom_to_list(ModuleName) ++ ".beam"]),
-            erl_db_log:msg(info, "Compiled model at: ~p", [BeamFilename]),
-            file:write_file(BeamFilename, Binary),
-            {ok, BeamFilename};
+    case file:read_file(Filename) of
         {error, Reason} ->
-            erl_db_log:msg(error, "Error in compilation: ~p", [Reason]);
+            erl_db_log:msg(error, "Error while reading ~p. Reason: ~p", [Filename, Reason]),
+            throw(file_read_error);
+        {ok, BinStr} ->
+            Str = erlang:binary_to_list(BinStr),
+            {ok, Tokens, _Len} = erl_db_lex:string(Str),
+            {ok, Model} = erl_db_parser:parse(Tokens),
+
+            #'MODEL'{imports = _Imports, name = Name, backend = #'BACKEND'{name = Backend, arguments = _BackendArgs}, fields = Fields, functions = _Functions} = Model,
+
+            %% First we need to check that the syntax tree is fine
+            parse(Model, #state{}),
+
+            ModuleAST = module_ast(Name),
+
+            BackendGetFunctionAST =
+                function_ast("backend", [], none, [erl_syntax:atom(extract(Backend))]),
+            BackendGetFunction1AST =
+                function_ast("backend", [erl_syntax:underscore()], none, [erl_syntax:atom(extract(Backend))]),
+
+            FieldsfunctionAST =
+                function_ast("fields", [], none, [proplist_from_fields(Fields)]),
+
+            Fieldsfunction2AST =
+                function_ast("fields", [erl_syntax:underscore()], none, [proplist_from_fields(Fields)]),
+
+            SaveFunctionAST = save_function_ast(Name),
+
+            DeleteFunctionAST = delete_function_ast(Name),
+
+            GettersAST = [ getter_ast(Name, Field) || Field <- Fields ],
+            SettersAST = [ setter_ast(Name, Field) || Field <- Fields ],
+
+            NewFunctionAST = new_function_ast(Name, Fields),
+
+            FunctionRecordAST = create_record_from_fields(Name, Fields),
+
+            CompileAST = erl_syntax:attribute(erl_syntax:atom(compile), [erl_syntax:atom("export_all")]),
+
+            Forms = [ erl_syntax:revert(AST) || AST <- [ModuleAST,
+                                                        CompileAST,
+                                                        FunctionRecordAST,
+                                                        BackendGetFunctionAST,
+                                                        BackendGetFunction1AST,
+                                                        NewFunctionAST,
+                                                        FieldsfunctionAST,
+                                                        Fieldsfunction2AST,
+                                                        SaveFunctionAST,
+                                                        DeleteFunctionAST
+                                                       ] ++ GettersAST ++ SettersAST ],
+
+            OutDir = proplists:get_value(out_dir, Options, "."),
+            case compile:forms(Forms) of
+                {ok,ModuleName,Binary} ->
+                    BeamFilename = filename:join([OutDir, atom_to_list(ModuleName) ++ ".beam"]),
+                    erl_db_log:msg(info, "Compiled model at: ~p", [BeamFilename]),
+                    file:write_file(BeamFilename, Binary),
+                    {ok, BeamFilename};
+                {ok,ModuleName,Binary,Warnings} ->
+                    erl_db_log:msg(warning, "Compiled ~p with warnings: ~p", [ModuleName, Warnings]),
+                    BeamFilename = filename:join([OutDir, atom_to_list(ModuleName) ++ ".beam"]),
+                    erl_db_log:msg(info, "Compiled model at: ~p", [BeamFilename]),
+                    file:write_file(BeamFilename, Binary),
+                    {ok, BeamFilename};
+                {error, Reason} ->
+                    erl_db_log:msg(error, "Error in compilation: ~p", [Reason]);
         {error, Errors, _Warnings} ->
-            erl_db_log:msg(error, "Could not compile model: ~p. Exited with errors: ~p~n", [Errors])
+                    erl_db_log:msg(error, "Could not compile model: ~p. Exited with errors: ~p~n", [Errors])
+            end
     end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -405,18 +410,3 @@ new_function_ast({identifier, ModuleName, _, _}, Fields) ->
           Fields),
 
     function_ast("new", Args, none, [erl_syntax:record_expr(none, erl_syntax:atom(ModuleName), FieldSetters)]).
-
-
-
-get_env(Application, Key, Default) ->
-    case code:is_loaded(boss_env) of
-        false ->
-            case application:get_env(Application, Key) of
-                {ok, Value} ->
-                    Value;
-                _ ->
-                    Default
-            end;
-        _ ->
-            boss_env:get_env(Key, Default)
-    end.
