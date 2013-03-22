@@ -1,9 +1,14 @@
 -record('MODEL', {
           imports,
+          version,
           name,
           backend,
           fields,
           functions
+         }).
+
+-record('VERSION', {
+          value
          }).
 
 -record('IMPORT', {

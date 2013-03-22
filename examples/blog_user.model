@@ -1,5 +1,6 @@
 name: blog_user
-backend: postgres()
+vsn: 1
+backend: mnesia()
 
 fields:
         id      :: primary_key(auto_increment)

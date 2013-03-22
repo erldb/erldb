@@ -18,6 +18,7 @@ name           : {token, {'name', TokenLine}}.
 backend        : {token, {'backend', TokenLine}}.
 fields         : {token, {'fields', TokenLine}}.
 functions      : {token, {'functions', TokenLine}}.
+vsn            : {token, {'vsn', TokenLine}}.
 {Identifier}   : {token, {'identifier', list_to_atom(TokenChars), TokenLine, TokenLen}}.
 {EscapedIdentifier} : {token, {'identifier', list_to_atom(remove_escapes(TokenChars)), TokenLine, TokenLen}}.
 {HiddenChars}+ : skip_token.

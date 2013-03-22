@@ -1,6 +1,6 @@
-Nonterminals value field_argument field_argument_list field fields_list backend_decl import_list model.
+Nonterminals value field_argument field_argument_list field fields_list vsn_option backend_decl import_list model.
 
-Terminals 'validator' 'colon' 'dot' 'lparen' 'rparen' 'equal' 'comma' 'int_constant' 'import' 'name' 'backend' 'fields' 'functions' 'identifier'.
+Terminals 'validator' 'colon' 'dot' 'lparen' 'rparen' 'equal' 'comma' 'int_constant' 'import' 'name' 'backend' 'fields' 'functions' 'identifier' 'vsn'.
 
 Rootsymbol model.
 
@@ -24,7 +24,7 @@ field_argument_list ->
 field ->
     'identifier' 'validator' 'identifier' 'lparen' field_argument_list 'rparen' : field('$1', '$3', '$5').
 field ->
-        'identifier' 'validator' 'identifier' 'lparen' 'rparen' : field('$1', '$3', []).
+    'identifier' 'validator' 'identifier' 'lparen' 'rparen' : field('$1', '$3', []).
 
 fields_list ->
     field : ['$1'].
@@ -43,24 +43,35 @@ import_list ->
 import_list ->
     'identifier' 'comma' import_list : [import('$1')]++'$3'.
 
+vsn_option ->
+    '$empty' : nil.
+vsn_option ->
+    'vsn' 'colon' 'int_constant' : vsn('$3').
+
 model ->
-    'import' 'colon' import_list 'name' 'colon' 'identifier' backend_decl 'fields' 'colon' fields_list : model('$3', '$6', '$7', '$10', []).
+    'import' 'colon' import_list 'name' 'colon' 'identifier' vsn_option backend_decl 'fields' 'colon' fields_list : model('$3', '$6', '$7', '$8', '$11', []).
 model ->
-    'name' 'colon' 'identifier' backend_decl 'fields' 'colon' fields_list : model([], '$3', '$4', '$7', []).
+    'name' 'colon' 'identifier' vsn_option backend_decl 'fields' 'colon' fields_list : model([], '$3', '$4', '$5', '$8', []).
 
 
 Erlang code.
 -include("../include/erl_db_types.hrl").
 -export([]).
 
-model(Imports, Name, Backend, Fields, Functions) ->
+model(Imports, Name, Vsn, Backend, Fields, Functions) ->
     #'MODEL'{
        imports = Imports,
+       version = Vsn,
        name = Name,
        backend = Backend,
        fields = Fields,
        functions = Functions
       }.
+
+vsn(Vsn) ->
+    #'VERSION'{
+     value = Vsn
+    }.
 
 backend(Name, Arguments) ->
     #'BACKEND'{
