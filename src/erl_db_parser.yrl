@@ -1,6 +1,6 @@
 Nonterminals value field_argument field_argument_list field fields_list vsn_option backend_decl import_list model.
 
-Terminals 'validator' 'colon' 'dot' 'lparen' 'rparen' 'equal' 'comma' 'int_constant' 'import' 'name' 'backend' 'fields' 'functions' 'identifier' 'vsn'.
+Terminals 'validator' 'colon' 'dot' 'lparen' 'rparen' 'equal' 'comma' 'int_constant' 'import' 'name' 'backend' 'fields' 'functions' 'identifier' 'vsn' 'float' 'string'.
 
 Rootsymbol model.
 
@@ -8,6 +8,8 @@ value ->
     'identifier' : '$1'.
 value ->
     'int_constant' : '$1'.
+value ->
+    'string'       : remove_quotes('$1').
 
 field_argument ->
     'identifier' 'dot' 'identifier' : {model_field, {'$1', '$3'}}.
@@ -46,7 +48,7 @@ import_list ->
 vsn_option ->
     '$empty' : nil.
 vsn_option ->
-    'vsn' 'colon' 'int_constant' : vsn('$3').
+    'vsn' 'colon' 'float' : vsn('$3').
 
 model ->
     'import' 'colon' import_list 'name' 'colon' 'identifier' vsn_option backend_decl 'fields' 'colon' fields_list : model('$3', '$6', '$7', '$8', '$11', []).
@@ -57,6 +59,15 @@ model ->
 Erlang code.
 -include("../include/erl_db_types.hrl").
 -export([]).
+
+remove_quotes({string, Str, TokenLine}) ->
+    {string, remove_quotes(Str), TokenLine};
+remove_quotes([]) ->
+    [];
+remove_quotes([$"|Tl]) ->
+    remove_quotes(Tl);
+remove_quotes([Hd|Tl]) ->
+    [Hd|remove_quotes(Tl)].
 
 model(Imports, Name, Vsn, Backend, Fields, Functions) ->
     #'MODEL'{
