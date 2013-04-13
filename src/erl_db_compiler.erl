@@ -26,8 +26,8 @@ parse([#'BACKEND'{name = {'identifier', Backendname, Line, _TokenLen}, arguments
     ConfigBackends = erl_db_env:get_env(erl_db, db_pools, []),
     case get_backend(Backendname, ConfigBackends) of
         undefined ->
-            erl_db_log:msg(error, "Could not find the specified backend-config. Declared as ~p on line ~p", [Backendname, Line]),
-            throw(backend_not_found);
+            %% Don't crash on this. Just inform the user that the backend couldn't be found
+            erl_db_log:msg(warning, "Could not find the specified backend-config. Declared as ~p on line ~p", [Backendname, Line]);
         _Value ->
             ok
     end,
