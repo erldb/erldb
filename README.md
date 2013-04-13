@@ -8,17 +8,20 @@ Check 'testmodel.model' in the examples/ directory
 
 This is the example model that is in examples directory:
 
-     import: users, tags
+     import: user, tags
 
      name: blog_entry
-     backend: mnesia
-
-     /* This is a test comment */
+     backend: postgres(
+       schema = erl_db,
+       table = my_blog_table
+     )
+     vsn: 1.0
 
      fields:
         id :: primary_key(auto_increment)
         title :: string(max_length = 255, index)
-        author :: string(max_length = 100)
+        author :: one_to_one(user.id)
+        tags :: one_to_many(tags.id)
         created :: datetime()
         text :: string()
 
