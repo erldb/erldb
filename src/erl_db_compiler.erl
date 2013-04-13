@@ -141,17 +141,27 @@ compile(Filename, Options) ->
             {ok, Tokens, _Len} = erl_db_lex:string(Str),
             {ok, Model} = erl_db_parser:parse(Tokens),
 
-            #'MODEL'{imports = _Imports, name = Name, backend = #'BACKEND'{name = Backend, arguments = _BackendArgs}, fields = Fields, functions = _Functions} = Model,
+            #'MODEL'{imports = _Imports, version = Version, name = Name, backend = #'BACKEND'{name = Backend, arguments = _BackendArgs}, fields = Fields, functions = _Functions} = Model,
 
             %% First we need to check that the syntax tree is fine
             parse(Model, #state{}),
 
             ModuleAST = module_ast(Name),
 
+            VsnAST =
+                case Version of
+                    nil ->
+                        erl_syntax:string("1.0");
+                    #'VERSION'{value = {float, Value, _}} ->
+                        erl_syntax:string(Value)
+                end,
+
+            VsnAttrAST = erl_syntax:attribute(erl_syntax:atom(vsn), [VsnAST]),
+
+
+            %% We keep all information about the database in attributes
             BackendGetFunctionAST =
-                function_ast("backend", [], none, [erl_syntax:atom(extract(Backend))]),
-            BackendGetFunction1AST =
-                function_ast("backend", [erl_syntax:underscore()], none, [erl_syntax:atom(extract(Backend))]),
+                erl_syntax:attribute(erl_syntax:atom(backend), [erl_syntax:atom(extract(Backend))]),
 
             FieldsfunctionAST =
                 erl_syntax:attribute(erl_syntax:atom(fields), [proplist_from_fields(Fields)]),
@@ -171,16 +181,17 @@ compile(Filename, Options) ->
 
             Forms = [ erl_syntax:revert(AST) || AST <- [ModuleAST,
                                                         CompileAST,
+                                                        VsnAttrAST,
                                                         FieldsfunctionAST,
                                                         FunctionRecordAST,
                                                         BackendGetFunctionAST,
-                                                        BackendGetFunction1AST,
                                                         NewFunctionAST,
                                                         SaveFunctionAST,
                                                         DeleteFunctionAST
                                                        ] ++ GettersAST ++ SettersAST ],
 
             OutDir = proplists:get_value(out_dir, Options, "."),
+
             case compile:forms(Forms) of
                 {ok,ModuleName,Binary} ->
                     BeamFilename = filename:join([OutDir, atom_to_list(ModuleName) ++ ".beam"]),
