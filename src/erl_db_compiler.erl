@@ -10,9 +10,15 @@
           imported_models,
           backend,
           fields,
-          funtions
+          funtions,
+          current_filename,
+          options,
+          compiled_modules
          }).
 
+parse([], State) -> State;
+
+%% Parse models
 parse([#'MODEL'{imports = Imports, name = Name, backend = Backend, fields = Fields, functions = Functions}|_], State) ->
     ImportState = parse(Imports, State#state{imported_models = dict:new()}),
     NameState = parse(Name, ImportState),
@@ -20,26 +26,33 @@ parse([#'MODEL'{imports = Imports, name = Name, backend = Backend, fields = Fiel
     FieldsState = parse(Fields, BackendState),
     parse(Functions, FieldsState);
 
-parse([], State) -> State;
 parse([#'BACKEND'{name = {'identifier', Backendname, Line, _TokenLen}, arguments = Arguments}|Tl], State) ->
     %% Control that the backend config is defined
     ConfigBackends = erl_db_env:get_env(erl_db, db_pools, []),
     case get_backend(Backendname, ConfigBackends) of
         undefined ->
-            %% Don't crash on this. Just inform the user that the backend couldn't be found
             erl_db_log:msg(warning, "Could not find the specified backend-config. Declared as ~p on line ~p", [Backendname, Line]);
         _Value ->
             ok
     end,
     NewState = parse(Arguments, State#state{current_type = backend}),
     parse(Tl, NewState);
-parse([#'IMPORT'{model = {'identifier', Modelname, Line, _TokenLen}}|Tl], State = #state{imported_models = ImportedModels}) ->
+parse([#'IMPORT'{model = {'identifier', Modelname, Line, _TokenLen}}|Tl] = ParseList, State = #state{imported_models = ImportedModels, current_filename = Filename, options = Options, compiled_modules = CM}) ->
     %% We need to check if the model is loaded or not
     case load_imports(Modelname) of
-        undefined ->
-            erl_db_log:msg(error, "Could not find the model '~p' declared on line ~p", [Modelname, Line]),
-            throw(model_not_found);
-        Fields ->
+        error ->
+            %% Lets try and compile this sucker
+            case lists:any(fun(Model) when Model == Modelname -> true; (_) -> false end, CM) of
+                true ->
+                    %% We've looked at this module before and could not compile it
+                    erl_db_log:msg(error, "Could not find the model '~p' declared on line ~p", [Modelname, Line]),
+                    throw(model_not_found);
+                _ ->
+                    erl_db_log:msg(info, "Trying to compile " ++ Modelname ++ ".erl declared on line ~p in file ~p", [Line, Filename]),
+                    compile(Modelname ++ ".erl", Options),
+                    parse(ParseList, State#state{compiled_modules = [Modelname|CM]})
+            end;
+        {ok, Fields} ->
             UpdatedImportedModels = dict:store(Modelname, Fields, ImportedModels),
             parse(Tl, State#state{imported_models = UpdatedImportedModels})
     end;
@@ -94,7 +107,6 @@ parse([{'identifier', Name, _Line, _Len}|Tl], State) ->
     parse(Tl, State#state{current_value = Name});
 
 %% Parsing of argument-lists
-%% TODO: Build another record for argument-lists
 parse([{model_field, {Model, Field}}|Tl], State = #state{current_type = CT, imported_models = IM}) when CT == one_to_many;
                                                                                                         CT == foreign_key ->
     {'identifier', Modelname, Line, _Len} = Model,
@@ -104,6 +116,8 @@ parse([{model_field, {Model, Field}}|Tl], State = #state{current_type = CT, impo
         {ok, Fields} ->
             case get_field(Fieldname, Fields) of
                 undefined ->
+                    %% We might want wether or not to compile this module in the case it's not compiled yet?
+
                     erl_db_log:msg(error, "Field '~p' not found in target model '~p'. Check your spelling and ensure that the given field exists. Line ~p.", [Fieldname, Modelname, Line]),
                     throw(field_not_found);
                 _Field ->
@@ -144,7 +158,7 @@ compile(Filename, Options) ->
             #'MODEL'{imports = _Imports, version = Version, name = Name, backend = #'BACKEND'{name = Backend, arguments = _BackendArgs}, fields = Fields, functions = _Functions} = Model,
 
             %% First we need to check that the syntax tree is fine
-            parse(Model, #state{}),
+            parse(Model, #state{current_filename = Filename, options = Options}),
 
             ModuleAST = module_ast(Name),
 
@@ -234,11 +248,11 @@ atom_to_var(Name) when is_atom(Name) ->
 load_imports(Modelname) ->
         case code:is_loaded(Modelname) of
             {file, _Loaded} ->
-                Modelname:fields();
+                {ok, Modelname:fields()};
             false ->
                 %% We need to see if we can compile this model
                 %% First we need to find it (How?)
-                undefined
+                error
         end.
 
 get_line_number({'identifier', _Ident, Line, _Len}) ->
