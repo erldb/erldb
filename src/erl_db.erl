@@ -24,7 +24,10 @@ delete(Model, Id) when is_tuple(Model) ->
                                   end).
 
 save(Model) when is_tuple(Model) ->
-    Poolname = Model:backend(),
+    Modelname = element(1, Model),
+    Attributes = Modelname:module_info(attributes),
+    [Poolname] = proplists:get_value(backend, Attributes),
+
     poolboy:transaction(Poolname, fun(Worker) ->
                                           gen_server:call(Worker, {save, Model})
                                   end).
