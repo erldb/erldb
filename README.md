@@ -8,8 +8,6 @@ Check 'testmodel.model' in the examples/ directory
 
 This is the example model that is in examples directory:
 
-     import: user, tags
-
      name: blog_entry
      backend: postgres(
        schema = erl_db,
