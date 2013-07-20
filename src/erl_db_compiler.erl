@@ -2,432 +2,213 @@
 
 -include("../include/erl_db_types.hrl").
 
--export([compile/1, compile/2]).
+-export([
+         compile/1,
+         compile/2
+        ]).
 
 -record(state, {
-          current_type,
-          current_value,
-          imported_models,
+          out_dir,
           backend,
-          fields,
-          funtions,
-          current_filename,
-          options,
-          compiled_modules
+          abs_tree_attr = [],
+          abs_tree_flds = []
          }).
 
-parse([], State) -> State;
 
-%% Parse models
-parse([#'MODEL'{imports = Imports, name = Name, backend = Backend, fields = Fields, functions = Functions}|_], State) ->
-    ImportState = parse(Imports, State#state{imported_models = dict:new()}),
-    NameState = parse(Name, ImportState),
-    BackendState = parse(Backend, NameState),
-    FieldsState = parse(Fields, BackendState),
-    parse(Functions, FieldsState);
-
-parse([#'BACKEND'{name = {'identifier', Backendname, Line, _TokenLen}, arguments = Arguments}|Tl], State) ->
-    %% Control that the backend config is defined
-    ConfigBackends = erl_db_env:get_env(erl_db, db_pools, []),
-    case get_backend(Backendname, ConfigBackends) of
-        undefined ->
-            erl_db_log:msg(warning, "Could not find the specified backend-config. Declared as ~p on line ~p", [Backendname, Line]);
-        _Value ->
-            ok
-    end,
-    NewState = parse(Arguments, State#state{current_type = backend}),
-    parse(Tl, NewState);
-parse([#'IMPORT'{model = {'identifier', Modelname, Line, _TokenLen}}|Tl] = ParseList, State = #state{imported_models = ImportedModels, current_filename = Filename, options = Options, compiled_modules = CM}) ->
-    %% We need to check if the model is loaded or not
-    case load_imports(Modelname) of
-        error ->
-            %% Lets try and compile this sucker
-            case lists:any(fun(Model) when Model == Modelname -> true; (_) -> false end, CM) of
-                true ->
-                    %% We've looked at this module before and could not compile it
-                    erl_db_log:msg(error, "Could not find the model '~p' declared on line ~p", [Modelname, Line]),
-                    throw(model_not_found);
-                _ ->
-                    erl_db_log:msg(info, "Trying to compile " ++ Modelname ++ ".erl declared on line ~p in file ~p", [Line, Filename]),
-                    compile(Modelname ++ ".erl", Options),
-                    parse(ParseList, State#state{compiled_modules = [Modelname|CM]})
-            end;
-        {ok, Fields} ->
-            UpdatedImportedModels = dict:store(Modelname, Fields, ImportedModels),
-            parse(Tl, State#state{imported_models = UpdatedImportedModels})
-    end;
-parse([#'FIELD'{name = Name, type = Type, arguments = Args}|Tl], State) ->
-    parse(Name, State),
-    TypeState = parse(Type, State),
-    parse(Args, TypeState),
-
-    %% Validate values of fields
-    case TypeState#state.current_type of
-        FieldType when FieldType == foreign_key; FieldType == one_to_many ->
-            case proplists:get_value(model_field, Args) of
-                undefined ->
-                    {_, Fieldname, Line, _} = Name,
-                    erl_db_log:msg(error, "No 'model.field'-argument given to field '~p' of type ~p. Line ~p", [Fieldname, FieldType, Line]),
-                    throw(foreign_key_error);
-                _ ->
-                    ok
-            end;
-        _ ->
-            ok
-    end,
-
-    parse(Tl, State);
-
-%% Type definitions
-parse([{'identifier', id, _Line, _Len}|Tl], State) ->
-    parse(Tl, State#state{current_type = id});
-parse([{'identifier', string, _Line, _Len}|Tl], State) ->
-    parse(Tl, State#state{current_type = string});
-parse([{'identifier', binary, _Line, _Len}|Tl], State) ->
-    parse(Tl, State#state{current_type = binary});
-parse([{'identifier', integer, _Line, _Len}|Tl], State) ->
-    parse(Tl, State#state{current_type = integer});
-parse([{'identifier', float, _Line, _Len}|Tl], State) ->
-    parse(Tl, State#state{current_type = float});
-parse([{'identifier', datetime, _Line, _Len}|Tl], State) ->
-    parse(Tl, State#state{current_type = datetime});
-parse([{'identifier', timestamp, _Line, _Len}|Tl], State) ->
-    parse(Tl, State#state{current_type = timestamp});
-parse([{'identifier', boolean, _Line, _Len}|Tl], State) ->
-    parse(Tl, State#state{current_type = boolean});
-parse([{'identifier', primary_key, _Line, _Len}|Tl], State) ->
-    parse(Tl, State#state{current_type = primary_key});
-parse([{'identifier', foreign_key, _Line, _Len}|Tl], State) ->
-    %% We should require a model_field when this type
-    parse(Tl, State#state{current_type = foreign_key});
-parse([{'identifier', one_to_many, _Line, _Len}|Tl], State) ->
-    %% We should require a model_field when this type
-    parse(Tl, State#state{current_type = one_to_many});
-parse([{'identifier', Name, _Line, _Len}|Tl], State) ->
-    parse(Tl, State#state{current_value = Name});
-
-%% Parsing of argument-lists
-parse([{model_field, {Model, Field}}|Tl], State = #state{current_type = CT, imported_models = IM}) when CT == one_to_many;
-                                                                                                        CT == foreign_key ->
-    {'identifier', Modelname, Line, _Len} = Model,
-    {'identifier', Fieldname, _Line2, _Len2} = Field,
-
-    case dict:find(Modelname, IM) of
-        {ok, Fields} ->
-            case get_field(Fieldname, Fields) of
-                undefined ->
-                    %% We might want wether or not to compile this module in the case it's not compiled yet?
-
-                    erl_db_log:msg(error, "Field '~p' not found in target model '~p'. Check your spelling and ensure that the given field exists. Line ~p.", [Fieldname, Modelname, Line]),
-                    throw(field_not_found);
-                _Field ->
-                    ok
-            end;
-        _ ->
-            erl_db_log:msg(error, "Modelname '~p' is used but not imported, line ~p.", [Modelname, Line]),
-            throw(model_not_imported)
-    end,
-    parse(Tl, State);
-parse([{model_field, {Model, _Field}}|_Tl], _State) ->
-    erl_db_log:msg(error, "Error on line ~p. Declaration of type model_field invalid.", [get_line_number(Model)]),
-    throw(faulty_type);
-
-parse([nil|Tl], State) ->
-    parse(Tl, State);
-
-parse([{_Key, _Value}|Tl], State) ->
-    parse(Tl, State);
-parse([_Value|Tl], State) ->
-    parse(Tl, State);
-parse(Element, State) when not is_list(Element) ->
-    parse([Element], State).
-
-compile(Filename) ->
+-spec compile(string()) -> ok.
+compile(Filename) when is_list(Filename) ->
     compile(Filename, []).
 
-compile(Filename, Options) ->
-    case file:read_file(Filename) of
-        {error, Reason} ->
-            erl_db_log:msg(error, "Error while reading ~p. Reason: ~p", [Filename, Reason]),
-            throw(file_read_error);
-        {ok, BinStr} ->
-            Str = erlang:binary_to_list(BinStr),
-            {ok, Tokens, _Len} = erl_db_lex:string(Str),
-            {ok, Model} = erl_db_parser:parse(Tokens),
+compile(Filename, Options) when is_list(Filename) ->
+    {ok, Bin} = file:read_file(Filename),
+    Str = erlang:binary_to_list(Bin),
+    {ok, Tokens, _} = erl_scan:string(Str),
+    {ok, Tree} = erl_db_parser:parse(Tokens),
+    compile_tree(Tree, Options).
 
-            #'MODEL'{imports = _Imports, version = Version, name = Name, backend = #'BACKEND'{name = Backend, arguments = _BackendArgs}, fields = Fields, functions = _Functions} = Model,
+compile_tree(Tree, Options) ->
+    OutDir = proplists:get_value(out_dir, Options, "ebin"),
+    State = parse(Tree, #state{out_dir = OutDir}),
+    Name = proplists:get_value(name, State#state.abs_tree_attr),
+    [IncludeDir|_] = proplists:get_value(include_dirs, Options, ["include"]),
+    RecordStr = generate_hrl(State),
+    file:make_dir(IncludeDir),
+    ok = file:write_file(filename:join([IncludeDir, atom_to_list(Name) ++ ".hrl"]), RecordStr),
+    erl_db_log:msg(info, "Saved field-declaration file in ~p", [filename:join([IncludeDir, atom_to_list(Name) ++ ".hrl"])]),
+    generate_functions(Name, State),
+    ok.
 
-            %% First we need to check that the syntax tree is fine
-            parse(Model, #state{current_filename = Filename, options = Options}),
+parse([], State) -> State;
+parse([List], State) when is_list(List) -> parse(List, State);
 
-            ModuleAST = module_ast(Name),
-
-            VsnAST =
-                case Version of
-                    nil ->
-                        erl_syntax:string("1.0");
-                    #'VERSION'{value = {float, Value, _}} ->
-                        erl_syntax:string(Value)
-                end,
-
-            VsnAttrAST = erl_syntax:attribute(erl_syntax:atom(vsn), [VsnAST]),
-
-
-            %% We keep all information about the database in attributes
-            BackendGetFunctionAST =
-                erl_syntax:attribute(erl_syntax:atom(backend), [erl_syntax:atom(extract(Backend))]),
-
-            FieldsfunctionAST =
-                erl_syntax:attribute(erl_syntax:atom(fields), [proplist_from_fields(Fields)]),
-
-            SaveFunctionAST = save_function_ast(Name),
-
-            DeleteFunctionAST = delete_function_ast(Name),
-
-            GettersAST = [ getter_ast(Name, Field) || Field <- Fields ],
-            SettersAST = [ setter_ast(Name, Field) || Field <- Fields ],
-
-            NewFunctionAST = new_function_ast(Name, Fields),
-
-            FunctionRecordAST = create_record_from_fields(Name, Fields),
-
-            CompileAST = erl_syntax:attribute(erl_syntax:atom(compile), [erl_syntax:atom("export_all")]),
-
-            Forms = [ erl_syntax:revert(AST) || AST <- [ModuleAST,
-                                                        CompileAST,
-                                                        VsnAttrAST,
-                                                        FieldsfunctionAST,
-                                                        FunctionRecordAST,
-                                                        BackendGetFunctionAST,
-                                                        NewFunctionAST,
-                                                        SaveFunctionAST,
-                                                        DeleteFunctionAST
-                                                       ] ++ GettersAST ++ SettersAST ],
-
-            OutDir = proplists:get_value(out_dir, Options, "."),
-
-            case compile:forms(Forms) of
-                {ok,ModuleName,Binary} ->
-                    BeamFilename = filename:join([OutDir, atom_to_list(ModuleName) ++ ".beam"]),
-                    erl_db_log:msg(info, "Compiled model at: ~p", [BeamFilename]),
-                    file:write_file(BeamFilename, Binary),
-                    {ok, BeamFilename};
-                {ok,ModuleName,Binary,Warnings} ->
-                    erl_db_log:msg(warning, "Compiled ~p with warnings: ~p", [ModuleName, Warnings]),
-                    BeamFilename = filename:join([OutDir, atom_to_list(ModuleName) ++ ".beam"]),
-                    erl_db_log:msg(info, "Compiled model at: ~p", [BeamFilename]),
-                    file:write_file(BeamFilename, Binary),
-                    {ok, BeamFilename};
-                {error, Reason} ->
-                    erl_db_log:msg(error, "Error in compilation: ~p", [Reason]);
-        {error, Errors, _Warnings} ->
-                    erl_db_log:msg(error, "Could not compile model: ~p. Exited with errors: ~p~n", [Errors])
-            end
-    end.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%        INTERNAL FUNCTIONS                      %%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-extract(Val) when is_atom(Val) ->
-    Val;
-extract({Key, Val}) ->
-    {extract(Key), extract(Val)};
-extract({identifier, Name, _, _}) ->
-    Name.
-
-atom_to_var(Name) when is_atom(Name) ->
-    [FirstChar|Tl] = erlang:atom_to_list(Name),
-    case FirstChar of
-        LowerCase when LowerCase > 96 andalso LowerCase < 123 ->
-            [LowerCase-32|Tl];
+parse([#'ATTRIBUTE'{key = {atom, _, 'backend'}, value = {atom, Line, Value}, arguments = Args}|Tl], State = #state{abs_tree_attr = AbsTree}) ->
+    %% We might want to warn the user if using a backend that isn't defined
+    ConfigBackends = erl_db_env:get_env(erl_db, db_pools, []),
+    ValidBackend = [ X || {X, _, _, _} <- ConfigBackends, X == Value ],
+    case length(ValidBackend) of
+        1 ->
+            ok;
         _ ->
-            [FirstChar|Tl]
-    end.
+            erl_db_log:msg(warning, "Could not find the specified backend-config. Declared as ~p on line ~p", [Value, Line])
+    end,
+    parse(Tl, State#state{backend = {Value, Args}, abs_tree_attr = [{backend, Value}|AbsTree]});
 
-load_imports(Modelname) ->
-        case code:is_loaded(Modelname) of
-            {file, _Loaded} ->
-                {ok, Modelname:fields()};
-            false ->
-                %% We need to see if we can compile this model
-                %% First we need to find it (How?)
-                error
-        end.
+parse([#'ATTRIBUTE'{key = Key, value = Value, arguments = _Args}|Tl], State = #state{abs_tree_attr = AbsTree}) ->
+    parse(Tl, State#state{abs_tree_attr = [{unwrap(Key), unwrap(Value)}|AbsTree]});
 
-get_line_number({'identifier', _Ident, Line, _Len}) ->
-    Line;
-get_line_number({'int_constant', _Value, Line}) ->
-    Line;
-get_line_number({_, Line}) ->
-    Line.
-
-get_field(Key, MaybeProplist) ->
-    case proplists:get_value(Key, MaybeProplist) of
-        undefined ->
-            get_field1(Key, MaybeProplist);
-        Val ->
-            Val
-    end.
-
-get_field1(_, []) ->
-    undefined;
-get_field1(Key, [Tuple = {Key, _Type, _Args}|_Tl]) ->
-    Tuple;
-get_field1(Key, [_|Tl]) ->
-    get_field1(Key, Tl).
-
-get_backend(_, []) ->
-    undefined;
-get_backend(Key, [{Key, _Module, Args, _}|_Tl]) ->
-    Args;
-get_backend(Key, [_Element|Tl]) ->
-    get_backend(Key, Tl).
-
-
-
-
-
-%% SYNTAX STUFF
-
-convert_type({identifier, Type, _, _}) when is_atom(Type) ->
-    erl_syntax:atom(Type);
-convert_type({int_constant, Int, _}) when is_integer(Int) ->
-    erl_syntax:integer(Int);
-convert_type(Type) when is_atom(Type) ->
-    erl_syntax:atom(Type);
-convert_type(Type) when is_integer(Type) ->
-    erl_syntax:integer(Type);
-convert_type({Model, Field}) ->
-    erl_syntax:tuple([erl_syntax:atom("model_field"),
-                      erl_syntax:tuple([
-                                        erl_syntax:atom(extract(Model)),
-                                        erl_syntax:atom(extract(Field))
-                                        ])
-                      ]);
-convert_type(Type) ->
-    erl_db_log:msg(error, "Unknown type: ~p. Line ~p", [Type, get_line_number(Type)]),
-    {error, unknown_type}.
-
-convert_argument([]) -> [];
-convert_argument([{Key, Val}|Tl]) ->
-    [erl_syntax:tuple([convert_type(Key), convert_type(Val)])|convert_argument(Tl)];
-convert_argument([Key|Tl]) ->
-    [convert_type(Key)|convert_argument(Tl)];
-convert_argument(P) ->
-    {error, unknown_type, P}.
-
-proplist_from_fields(Fields) when is_list(Fields) ->
-    FieldList = [ proplist_from_fields(X) || X <- Fields ],
-    erl_syntax:list(FieldList);
-
-proplist_from_fields(#'FIELD'{name = {identifier, Name, _, _}, type = {identifier, Type, _, _}, arguments = Args}) ->
-    erl_syntax:tuple([erl_syntax:atom(extract(Name)), erl_syntax:atom(extract(Type)), erl_syntax:list(convert_argument(Args))]).
-
-create_record_from_fields({identifier, Modulename, _, _}, Fields) ->
-    RecordFields =
-        lists:map(
-          fun(#'FIELD'{name = {identifier, Name, _, _}}) ->
-                  erl_syntax:record_field(erl_syntax:atom(Name))
-          end,
-          Fields),
-
-    erl_syntax:attribute(
-      erl_syntax:atom(record),
-      [erl_syntax:atom(Modulename),
-       erl_syntax:tuple(RecordFields)]
-     ).
-
-
-module_ast({identifier, Modulename, _TokenLine, _TokenLength}) ->
-    erl_syntax:attribute(erl_syntax:atom(module),
-                         [erl_syntax:atom(Modulename)]).
-
-
-delete_function_ast({identifier, Modulename, _, _}) ->
-    function_ast(delete, [erl_syntax:variable(atom_to_var(Modulename))], none,
-                 [
-                  erl_syntax:application(
-                    erl_syntax:atom(erl_db),
-                    erl_syntax:atom(delete),
-                    [
-                     erl_syntax:variable(atom_to_var(Modulename))
-                    ]
-                   )]).
-
-save_function_ast({identifier, Modulename, _, _}) ->
-    function_ast(save, [erl_syntax:variable(atom_to_var(Modulename))], none,
-                 [
-                  erl_syntax:application(
-                    erl_syntax:atom(erl_db),
-                    erl_syntax:atom(save),
-                    [
-                     erl_syntax:variable(atom_to_var(Modulename))
-                    ]
-                   )]).
-
-function_ast({identifier, Name, _, _}, Arguments, Guards, Body) ->
-    function_ast(Name, Arguments, Guards, Body);
-
-function_ast(Functionname, Arguments, Guards, Body) ->
-    erl_syntax:function(erl_syntax:atom(Functionname),
-                        [erl_syntax:clause(
-                           Arguments, Guards,
-                           Body)]).
-
-getter_ast(Modulename, #'FIELD'{name = FunctionName, type = Mapper, arguments = Args}) when Mapper == foreign_key; Mapper == one_to_many ->
-    ListArgs = [ extract(X) || X <- Args ],
-    case proplists:get_value(target, ListArgs) of
-        {error, _Reason} ->
-            erl_db_log:msg(error, "Could not compile model ~p. Foreign key ~p does not have a target. ~p.",
-                           [Modulename, FunctionName, Modulename]),
-            throw(could_not_find_foreign_target);
-        Target ->
-            [TargetModel, TargetField] = re:split(Target, "\\.", [{return, list}]),
-            function_ast(FunctionName, [erl_syntax:variable(atom_to_var(Modulename))], none,
-                         [erl_syntax:application(
-                           erl_syntax:atom(erl_db),
-                           erl_syntax:atom(find),
-                           [erl_syntax:atom(TargetModel),
-                            erl_syntax:list([
-                                             erl_syntax:tuple([
-                                                               erl_syntax:atom(TargetField),
-                                                               erl_syntax:record_access(erl_syntax:variable(atom_to_var(Modulename)),
-                                                                                        erl_syntax:atom(Modulename),
-                                                                                        erl_syntax:atom(FunctionName))])])
-                            ])])
+parse([#'FIELD'{name = Name, type = {atom, Line, foreign_key}, arguments = Args}|Tl], State = #state{abs_tree_flds = AbsTree}) ->
+    %% This is a bit tricky since we need to determine if it's a valid target or not
+    Target = lists:filter(fun(#'FIELD_REF'{}) -> true; (_) -> false end, Args),
+    case Target of
+        [] ->
+            erl_db_log:msg(error, "No target specified for foreign key ~p, declared on line ~p", [unwrap(Name), Line]),
+            throw({error, reference_not_found});
+        [#'FIELD_REF'{model = {atom, _, Model}, field = {atom, _, Field}}] ->
+            case code:is_loaded(Model) of
+                false ->
+                    code:load(Model);
+                _ ->
+                    ok
+            end,
+            case erlang:function_exported(Model, Field, 1) of
+                true ->
+                    %% it's okay. Module is compiled, loaded and the key exists
+                    ok;
+                _ ->
+                    %% Warn the user
+                    erl_db_log:msg(warning, "Could not find specified field ~p in the model ~p.", [Field, Model]),
+                    ok
+            end,
+            parse(Tl, State#state{abs_tree_flds = [{foreign_key, Model, Field}|AbsTree]})
     end;
-getter_ast({identifier, Modulename, _, _}, #'FIELD'{name = {identifier, FunctionName, _, _}}) ->
-    function_ast(FunctionName, [erl_syntax:variable(atom_to_var(Modulename))], none,
-                 [erl_syntax:record_access(erl_syntax:variable(atom_to_var(Modulename)), erl_syntax:atom(Modulename), erl_syntax:atom(FunctionName))]).
+
+parse([#'FIELD'{name = Name, type = Type, arguments = Args}|Tl], State = #state{abs_tree_flds = AbsTree}) ->
+    ParsedArgs = [ parse_args(Arg) || Arg <- Args ],
+    parse(Tl, State#state{abs_tree_flds = [{unwrap(Name), unwrap(Type), ParsedArgs}|AbsTree]}).
+
+parse_args({Arg1, Arg2}) ->
+    {parse_args(Arg1), parse_args(Arg2)};
+parse_args({_, _, Val}) ->
+    Val.
+
+unwrap({_Type, _, Val}) ->
+    Val.
 
 
-setter_ast({identifier, Modulename, _, _}, #'FIELD'{name = {identifier, FunctionName, _, _}}) ->
-    function_ast(FunctionName, [
-                                erl_syntax:variable(atom_to_var(FunctionName)),
-                                erl_syntax:variable(atom_to_var(Modulename))
-                               ], none,
-                 [erl_syntax:record_expr(
-                    erl_syntax:variable(atom_to_var(Modulename)),
-                    erl_syntax:atom(Modulename),
-                    [erl_syntax:record_field(
-                       erl_syntax:atom(FunctionName),
-                       erl_syntax:variable(atom_to_var(FunctionName))
-                      )])]).
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% CODE GENERATION
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+generate_hrl(State) ->
+    RecordName = proplists:get_value(name, State#state.abs_tree_attr),
+    lists:concat(["-record(", RecordName, ", {", generate_hrl_fields(lists:reverse(State#state.abs_tree_flds)), "})."]).
 
-new_function_ast({identifier, ModuleName, _, _}, Fields) ->
-    Args =
-        lists:map(
-          fun(#'FIELD'{name = {identifier, Name, _, _}}) ->
-                  erl_syntax:variable(atom_to_var(Name))
-          end,
-          Fields),
+generate_hrl_fields([]) -> [];
+generate_hrl_fields([{Name, Type, Args}|Tl]) ->
+    Res =
+        case proplists:get_value(default, Args) of
+            undefined ->
+                case Type of
+                    primary_key ->
+                        lists:concat([Name, " = id :: any()"]);
+                    _ ->
+                        lists:concat([Name, " :: ", undefined, " | ", convert_to_erl_type(Type)])
+                end;
+            DefaultValue ->
+                lists:concat([Name, " = \"", DefaultValue, "\" :: ", convert_to_erl_type(Type)])
+        end,
+    case length(Tl) of
+        0 ->
+            Res ++ "\n" ++ generate_hrl_fields(Tl);
+        _ ->
+            Res ++ ",\n" ++ generate_hrl_fields(Tl)
+    end.
 
-    FieldSetters =
-        lists:map(
-          fun(#'FIELD'{name = {identifier, Name, _, _}}) ->
-                  erl_syntax:record_field(erl_syntax:atom(Name), erl_syntax:variable(atom_to_var(Name)))
-          end,
-          Fields),
+generate_functions(Modelname, State = #state{out_dir = OutDir}) ->
+    AST =
+        [
+         %% Header
+         erl_syntax:attribute(erl_syntax:atom(module),
+                              [erl_syntax:atom(Modelname)])] ++
+        [
+         %% Fields attribute
+         erl_syntax:attribute(erl_syntax:atom(fields), [ erl_syntax:list( [ erl_syntax:tuple([ erl_syntax:atom(Fieldname), erl_syntax:atom(Fieldvalue), convert_val_to_syntax(FieldArgs)]) || {Fieldname, Fieldvalue, FieldArgs} <- State#state.abs_tree_flds ] ) ])
+        ] ++
+        [
+         %% Backend attribute
+         erl_syntax:attribute(erl_syntax:atom(backend), [ convert_val_to_syntax(State#state.backend) ])
+        ] ++
+        [
+         %% include header file
+         erl_syntax:attribute(erl_syntax:atom(include), [ erl_syntax:string(filename:join(["include/", atom_to_list(Modelname) ++ ".hrl"])) ]),
 
-    function_ast("new", Args, none, [erl_syntax:record_expr(none, erl_syntax:atom(ModuleName), FieldSetters)]).
+         %% export_all attribute
+         erl_syntax:attribute(erl_syntax:atom(compile), [erl_syntax:atom("export_all")]),
+
+         %% Save function
+         erl_syntax:function(erl_syntax:atom("save"),
+                             [erl_syntax:clause(
+                                [erl_syntax:variable("Model")], none, [erl_syntax:application(erl_syntax:atom(erl_db), erl_syntax:atom(save), [ erl_syntax:variable("Model") ])])]),
+
+         %% Delete function
+         erl_syntax:function(erl_syntax:atom("delete"),
+                             [erl_syntax:clause(
+                                [erl_syntax:variable("Model")], none, [erl_syntax:application(erl_syntax:atom(erl_db), erl_syntax:atom(delete), [ erl_syntax:variable("Model") ])])])
+        ],
+    Forms = [ erl_syntax:revert(Form) || Form <- AST ],
+
+    case compile:forms(Forms) of
+        {ok,ModuleName,Binary} ->
+            BeamFilename = filename:join([OutDir, atom_to_list(ModuleName) ++ ".beam"]),
+            erl_db_log:msg(info, "Compiled model at: ~p", [BeamFilename]),
+            file:write_file(BeamFilename, Binary),
+            {ok, BeamFilename};
+        {ok,ModuleName,Binary,Warnings} ->
+            erl_db_log:msg(warning, "Compiled ~p with warnings: ~p", [ModuleName, Warnings]),
+            BeamFilename = filename:join([OutDir, atom_to_list(ModuleName) ++ ".beam"]),
+            erl_db_log:msg(info, "Compiled model at: ~p", [BeamFilename]),
+            file:write_file(BeamFilename, Binary),
+            {ok, BeamFilename};
+        {error, Reason} ->
+            erl_db_log:msg(error, "Error in compilation: ~p", [Reason]);
+        {error, Errors, _Warnings} ->
+            erl_db_log:msg(error, "Could not compile model: ~p. Exited with errors: ~p~n", [Errors])
+    end.
+
+
+
+convert_val_to_syntax({atom, _Line, Value}) ->
+    convert_val_to_syntax(Value);
+convert_val_to_syntax({integer, _Line, Value}) ->
+    convert_val_to_syntax(Value);
+convert_val_to_syntax({string, _Line, Value}) ->
+    convert_val_to_syntax(Value);
+convert_val_to_syntax({float, _Line, Value}) ->
+    convert_val_to_syntax(Value);
+convert_val_to_syntax(List) when is_list(List) ->
+    erl_syntax:list([ convert_val_to_syntax(Item) || Item <- List ]);
+convert_val_to_syntax(Atom) when is_atom(Atom) ->
+    erl_syntax:atom(Atom);
+convert_val_to_syntax(Integer) when is_integer(Integer) ->
+    erl_syntax:integer(Integer);
+convert_val_to_syntax(String) when is_list(String) ->
+    erl_syntax:string(String);
+convert_val_to_syntax(Float) when is_float(Float) ->
+    erl_syntax:float(Float);
+convert_val_to_syntax({Key, Val}) ->
+    erl_syntax:tuple([convert_val_to_syntax(Key), convert_val_to_syntax(Val)]).
+
+
+
+
+convert_to_erl_type(primary_key) ->
+    "string()";
+convert_to_erl_type(string) ->
+    "string()";
+convert_to_erl_type(datetime) ->
+    "tuple()";
+convert_to_erl_type(integer) ->
+    "integer()";
+convert_to_erl_type(float) ->
+    "float()";
+convert_to_erl_type(_) ->
+    "any()".

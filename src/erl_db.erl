@@ -5,10 +5,10 @@
          save/1,
          create_table/1]).
 
-find(Model, Id) ->
+find(Model, Conditions) ->
     Poolname = Model:backend(),
     poolboy:transaction(Poolname, fun(Worker) ->
-                                          gen_server:call(Worker, {find, Model, Id})
+                                          gen_server:call(Worker, {find, Model, normalize_conditions(Conditions)})
                                   end).
 
 delete(Model) when is_tuple(Model) ->
@@ -17,10 +17,10 @@ delete(Model) when is_tuple(Model) ->
                                           gen_server:call(Worker, {delete, Model})
                                   end).
 
-delete(Model, Id) when is_tuple(Model) ->
+delete(Model, Conditions) when is_atom(Model) ->
     Poolname = Model:backend(),
     poolboy:transaction(Poolname, fun(Worker) ->
-                                          gen_server:call(Worker, {delete, Model, Id})
+                                          gen_server:call(Worker, {delete, Model, normalize_conditions(Conditions)})
                                   end).
 
 save(Model) when is_tuple(Model) ->
@@ -45,3 +45,22 @@ transaction(Model) ->
                         fun(Worker) ->
                                 gen_server:call(Worker, {transaction, Model})
                         end).
+
+
+normalize_conditions(Conditions) ->
+    normalize_conditions(Conditions, []).
+
+normalize_conditions([], Acc) ->
+    lists:reverse(Acc);
+normalize_conditions([Key, Operator, Value|Rest], Acc) when is_atom(Key), is_atom(Operator) ->
+    normalize_conditions(Rest, [{Key, Operator, Value}|Acc]);
+normalize_conditions([{Key, Value}|Rest], Acc) when is_atom(Key) ->
+    normalize_conditions(Rest, [{Key, 'equals', Value}|Acc]);
+normalize_conditions([{Key, 'eq', Value}|Rest], Acc) when is_atom(Key) ->
+    normalize_conditions(Rest, [{Key, 'equals', Value}|Acc]);
+normalize_conditions([{Key, 'ne', Value}|Rest], Acc) when is_atom(Key) ->
+    normalize_conditions(Rest, [{Key, 'not_equals', Value}|Acc]);
+normalize_conditions([{Key, Operator, Value}|Rest], Acc) when is_atom(Key), is_atom(Operator) ->
+    normalize_conditions(Rest, [{Key, Operator, Value}|Acc]);
+normalize_conditions([{Key, Operator, Value, Options}|Rest], Acc) when is_atom(Key), is_atom(Operator), is_list(Options) ->
+    normalize_conditions(Rest, [{Key, Operator, Value, Options}|Acc]).

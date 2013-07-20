@@ -1,99 +1,52 @@
-Nonterminals value field_argument field_argument_list field fields_list vsn_option backend_decl import_list model.
-
-Terminals 'validator' 'colon' 'dot' 'lparen' 'rparen' 'equal' 'comma' 'int_constant' 'import' 'name' 'backend' 'fields' 'functions' 'identifier' 'vsn' 'float' 'string'.
+Nonterminals type argument arguments field fields fields_decl attributes attributes_list model.
+Terminals atom integer string float '=' ',' '(' ')' ':' '::' '.'.
 
 Rootsymbol model.
 
-value ->
-    'identifier' : '$1'.
-value ->
-    'int_constant' : '$1'.
-value ->
-    'string'       : remove_quotes('$1').
+'type' -> 'atom' : '$1'.
+'type' -> 'integer' : '$1'.
+'type' -> 'string' : '$1'.
+'type' -> 'float' : '$1'.
+'type' -> 'atom' '.' 'atom' : field_ref('$1', '$3').
 
-field_argument ->
-    'identifier' 'dot' 'identifier' : {model_field, {'$1', '$3'}}.
-field_argument ->
-    'identifier' : '$1'.
-field_argument ->
-    'identifier' 'equal' value : {'$1', '$3'}.
+'argument' -> 'type' : '$1'.
+'argument' -> 'atom' '=' 'type' : {'$1', '$3'}.
 
-field_argument_list ->
-    field_argument : ['$1'].
-field_argument_list ->
-    field_argument 'comma' field_argument_list : ['$1'] ++ '$3'.
+'arguments' -> '$empty' : [].
+'arguments' -> 'argument' ',' 'arguments' : [ '$1' | '$3' ].
+'arguments' -> 'argument' : [ '$1' ].
 
-field ->
-    'identifier' 'validator' 'identifier' 'lparen' field_argument_list 'rparen' : field('$1', '$3', '$5').
-field ->
-    'identifier' 'validator' 'identifier' 'lparen' 'rparen' : field('$1', '$3', []).
+'field' -> 'atom' '::' 'atom' '(' 'arguments' ')' : field('$1', '$3', '$5').
+'field' -> 'atom' '::' 'atom' '(' ')' : field('$1', '$3', []).
 
-fields_list ->
-    field : ['$1'].
-fields_list ->
-    field fields_list : ['$1'] ++ '$2'.
+'fields' -> 'field' : [ '$1' ].
+'fields' -> 'field' 'fields' : [ '$1' | '$2' ].
 
-backend_decl ->
-    'backend' 'colon' identifier : backend('$3', nil).
-backend_decl ->
-    'backend' 'colon' identifier 'lparen' 'rparen' : backend('$3', nil).
-backend_decl ->
-    'backend' 'colon' identifier 'lparen' field_argument_list 'rparen' : backend('$3', '$5').
+'attributes' -> 'atom' ':' 'type' : attribute('$1', '$3', []).
+'attributes' -> 'atom' ':' 'type' '(' 'arguments' ')' : attribute('$1', '$3', '$5').
+'attributes' -> 'atom' ':' 'fields' : '$3'.
 
-import_list ->
-    'identifier' : [import('$1')].
-import_list ->
-    'identifier' 'comma' import_list : [import('$1')]++'$3'.
+'attributes_list' -> 'attributes' : [ '$1' ].
+'attributes_list' -> 'attributes' 'attributes_list' : [ '$1' | '$2' ].
 
-vsn_option ->
-    '$empty' : nil.
-vsn_option ->
-    'vsn' 'colon' 'float' : vsn('$3').
+'fields_decl' -> 'atom' ':' 'fields' : '$3'.
 
-model ->
-    'import' 'colon' import_list 'name' 'colon' 'identifier' vsn_option backend_decl 'fields' 'colon' fields_list : model('$3', '$6', '$7', '$8', '$11', []).
-model ->
-    'name' 'colon' 'identifier' vsn_option backend_decl 'fields' 'colon' fields_list : model([], '$3', '$4', '$5', '$8', []).
+'model' -> 'attributes_list' : '$1'.
+
+%% We don't support inline code right now
+%%'model' -> 'functions_decl' : '$1'.
 
 
 Erlang code.
 -include("../include/erl_db_types.hrl").
 -export([]).
 
-remove_quotes({string, Str, TokenLine}) ->
-    {string, remove_quotes(Str), TokenLine};
-remove_quotes([]) ->
-    [];
-remove_quotes([$"|Tl]) ->
-    remove_quotes(Tl);
-remove_quotes([Hd|Tl]) ->
-    [Hd|remove_quotes(Tl)].
-
-model(Imports, Name, Vsn, Backend, Fields, Functions) ->
-    #'MODEL'{
-       imports = Imports,
-       version = Vsn,
-       name = Name,
-       backend = Backend,
-       fields = Fields,
-       functions = Functions
-      }.
-
-vsn(Vsn) ->
-    #'VERSION'{
-     value = Vsn
-    }.
-
-backend(Name, Arguments) ->
-    #'BACKEND'{
-         name = Name,
-         arguments = Arguments
-        }.
-
-import(Identifier) ->
-    #'IMPORT'{
-        model = Identifier
-       }.
+attribute(Key, Value, Arguments) ->
+    #'ATTRIBUTE'{
+           key = Key,
+           value = Value,
+           arguments = Arguments
+          }.
 
 field(Identifier, Type, Arguments) ->
     #'FIELD'{
@@ -101,3 +54,9 @@ field(Identifier, Type, Arguments) ->
        type = Type,
        arguments = Arguments
       }.
+
+field_ref(Model, Field) ->
+    #'FIELD_REF'{
+           model = Model,
+           field = Field
+          }.
