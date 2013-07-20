@@ -1,4 +1,3 @@
-import: blog_user
 name: blog_entry
 backend: postgres(
                 schema = erl_db,
@@ -8,7 +7,7 @@ backend: postgres(
 
 fields:
     id      :: primary_key(auto_increment, desc="This is so freaking awsome")
-    title   :: string(max_length = 255, index)
+    title   :: string(max_length = 255, default="This is a default text", index)
     author  :: one_to_many(blog_user.id)
     created :: datetime()
     text    :: string()
