@@ -9,6 +9,7 @@
 
 -record(state, {
           out_dir,
+          record_decl,
           backend,
           abs_tree_attr = [],
           abs_tree_flds = []
@@ -28,14 +29,14 @@ compile(Filename, Options) when is_list(Filename) ->
 
 compile_tree(Tree, Options) ->
     OutDir = proplists:get_value(out_dir, Options, "ebin"),
+    [IncludeDir|_] = proplists:get_value(include_dirs, Options, ["include"]),
     State = parse(Tree, #state{out_dir = OutDir}),
     Name = proplists:get_value(name, State#state.abs_tree_attr),
-    [IncludeDir|_] = proplists:get_value(include_dirs, Options, ["include"]),
     RecordStr = generate_hrl(State),
     file:make_dir(IncludeDir),
     ok = file:write_file(filename:join([IncludeDir, atom_to_list(Name) ++ ".hrl"]), RecordStr),
     erl_db_log:msg(info, "Saved field-declaration file in ~p", [filename:join([IncludeDir, atom_to_list(Name) ++ ".hrl"])]),
-    generate_functions(Name, State),
+    generate_functions(Name, State#state{record_decl = RecordStr}),
     ok.
 
 parse([], State) -> State;
@@ -123,7 +124,10 @@ generate_hrl_fields([{Name, Type, Args}|Tl]) ->
             Res ++ ",\n" ++ generate_hrl_fields(Tl)
     end.
 
-generate_functions(Modelname, State = #state{out_dir = OutDir}) ->
+generate_functions(Modelname, State = #state{out_dir = OutDir, record_decl = RecordStr}) ->
+    %% We need to include the record-definition. This is a bit ugly, but the preprocessor seems unwilling to help us include the same definition :(
+    {ok, Tokens, _} = erl_scan:string(RecordStr),
+    {ok, RecordDefinition} = erl_parse:parse_form(Tokens),
     AST =
         [
          %% Header
@@ -135,11 +139,10 @@ generate_functions(Modelname, State = #state{out_dir = OutDir}) ->
         ] ++
         [
          %% Backend attribute
-         erl_syntax:attribute(erl_syntax:atom(backend), [ convert_val_to_syntax(State#state.backend) ])
-        ] ++
-        [
-         %% include header file
-         erl_syntax:attribute(erl_syntax:atom(include), [ erl_syntax:string(filename:join(["include/", atom_to_list(Modelname) ++ ".hrl"])) ]),
+         erl_syntax:attribute(erl_syntax:atom(backend), [ convert_val_to_syntax(State#state.backend) ]),
+
+         %% Include the record definition
+         RecordDefinition,
 
          %% export_all attribute
          erl_syntax:attribute(erl_syntax:atom(compile), [erl_syntax:atom("export_all")]),
@@ -152,10 +155,14 @@ generate_functions(Modelname, State = #state{out_dir = OutDir}) ->
          %% Delete function
          erl_syntax:function(erl_syntax:atom("delete"),
                              [erl_syntax:clause(
-                                [erl_syntax:variable("Model")], none, [erl_syntax:application(erl_syntax:atom(erl_db), erl_syntax:atom(delete), [ erl_syntax:variable("Model") ])])])
+                                [erl_syntax:variable("Model")], none, [erl_syntax:application(erl_syntax:atom(erl_db), erl_syntax:atom(delete), [ erl_syntax:variable("Model") ])])]),
+
+         %% Dummy function. This is used to create an empty object
+         erl_syntax:function(erl_syntax:atom("dummy"),
+                             [erl_syntax:clause(none,
+                                                [ erl_syntax:record_expr(erl_syntax:atom(Modelname), []) ])])
         ],
     Forms = [ erl_syntax:revert(Form) || Form <- AST ],
-
     case compile:forms(Forms) of
         {ok,ModuleName,Binary} ->
             BeamFilename = filename:join([OutDir, atom_to_list(ModuleName) ++ ".beam"]),
@@ -168,6 +175,8 @@ generate_functions(Modelname, State = #state{out_dir = OutDir}) ->
             erl_db_log:msg(info, "Compiled model at: ~p", [BeamFilename]),
             file:write_file(BeamFilename, Binary),
             {ok, BeamFilename};
+        error ->
+            erl_db_log:msg(error, "Error in compilation for model ~p.", [Modelname]);
         {error, Reason} ->
             erl_db_log:msg(error, "Error in compilation: ~p", [Reason]);
         {error, Errors, _Warnings} ->
