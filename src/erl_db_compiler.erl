@@ -12,7 +12,8 @@
           record_decl,
           backend,
           abs_tree_attr = [],
-          abs_tree_flds = []
+          abs_tree_flds = [],
+          functions_str
          }).
 
 
@@ -23,11 +24,13 @@ compile(Filename) when is_list(Filename) ->
 compile(Filename, Options) when is_list(Filename) ->
     {ok, Bin} = file:read_file(Filename),
     Str = erlang:binary_to_list(Bin),
-    {ok, Tokens, _} = erl_scan:string(Str),
+    %% This is a bit ugly, but it's one method we can use to enable erlang functions in our models
+    [ModelInfo|Functions] = re:split(Str, "functions:", [{return, list}]),
+    {ok, Tokens, _} = erl_scan:string(ModelInfo),
     {ok, Tree} = erl_db_parser:parse(Tokens),
-    compile_tree(Tree, Options).
+    compile_tree(Tree, Functions, Options).
 
-compile_tree(Tree, Options) ->
+compile_tree(Tree, Functions, Options) ->
     OutDir = proplists:get_value(out_dir, Options, "ebin"),
     [IncludeDir|_] = proplists:get_value(include_dirs, Options, ["include"]),
     State = parse(Tree, #state{out_dir = OutDir}),
@@ -36,7 +39,7 @@ compile_tree(Tree, Options) ->
     file:make_dir(IncludeDir),
     ok = file:write_file(filename:join([IncludeDir, atom_to_list(Name) ++ ".hrl"]), RecordStr),
     erl_db_log:msg(info, "Saved field-declaration file in ~p", [filename:join([IncludeDir, atom_to_list(Name) ++ ".hrl"])]),
-    generate_functions(Name, State#state{record_decl = RecordStr}),
+    generate_functions(Name, State#state{record_decl = RecordStr, functions_str = Functions}),
     ok.
 
 parse([], State) -> State;
@@ -124,10 +127,21 @@ generate_hrl_fields([{Name, Type, Args}|Tl]) ->
             Res ++ ",\n" ++ generate_hrl_fields(Tl)
     end.
 
-generate_functions(Modelname, State = #state{out_dir = OutDir, record_decl = RecordStr}) ->
+generate_functions(Modelname, State = #state{out_dir = OutDir, record_decl = RecordStr, functions_str = FunctionsStr}) ->
     %% We need to include the record-definition. This is a bit ugly, but the preprocessor seems unwilling to help us include the same definition :(
     {ok, Tokens, _} = erl_scan:string(RecordStr),
+    %% We need to split the forms.
+    FunctionsAST =
+        case FunctionsStr of
+            [FStr] ->
+                {ok, FuncTs, _} = erl_scan:string(FStr),
+                {ok, FuncDef} = erl_parse:parse_form(FuncTs),
+                [FuncDef];
+            _ ->
+                []
+        end,
     {ok, RecordDefinition} = erl_parse:parse_form(Tokens),
+    io:format("FuncDef: ~p~n", [FunctionsAST]),
     AST =
         [
          %% Header
@@ -135,7 +149,7 @@ generate_functions(Modelname, State = #state{out_dir = OutDir, record_decl = Rec
                               [erl_syntax:atom(Modelname)])] ++
         [
          %% Fields attribute
-         erl_syntax:attribute(erl_syntax:atom(fields), [ erl_syntax:list( [ erl_syntax:tuple([ erl_syntax:atom(Fieldname), erl_syntax:atom(Fieldvalue), convert_val_to_syntax(FieldArgs)]) || {Fieldname, Fieldvalue, FieldArgs} <- State#state.abs_tree_flds ] ) ])
+         erl_syntax:attribute(erl_syntax:atom(fields), [ erl_syntax:list( lists:reverse([ erl_syntax:tuple([ erl_syntax:atom(Fieldname), erl_syntax:atom(Fieldvalue), convert_val_to_syntax(FieldArgs)]) || {Fieldname, Fieldvalue, FieldArgs} <- State#state.abs_tree_flds ]) ) ])
         ] ++
         [
          %% Backend attribute
@@ -157,11 +171,11 @@ generate_functions(Modelname, State = #state{out_dir = OutDir, record_decl = Rec
                              [erl_syntax:clause(
                                 [erl_syntax:variable("Model")], none, [erl_syntax:application(erl_syntax:atom(erl_db), erl_syntax:atom(delete), [ erl_syntax:variable("Model") ])])]),
 
-         %% Dummy function. This is used to create an empty object
+         %% Dummy function. This is used to create an empty object. This should have all the fields set to undefined
          erl_syntax:function(erl_syntax:atom("dummy"),
                              [erl_syntax:clause(none,
                                                 [ erl_syntax:record_expr(erl_syntax:atom(Modelname), []) ])])
-        ],
+        ] ++ FunctionsAST,
     Forms = [ erl_syntax:revert(Form) || Form <- AST ],
     case compile:forms(Forms) of
         {ok,ModuleName,Binary} ->
