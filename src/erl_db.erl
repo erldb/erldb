@@ -1,51 +1,54 @@
 -module(erl_db).
 
--export([find/2,
+-export([
+         find/2,
+         delete/1,
          delete/2,
-         save/1,
-         create_table/1]).
+         save/1
+        ]).
 
 find(Model, Conditions) ->
-    Poolname = Model:backend(),
-    poolboy:transaction(Poolname, fun(Worker) ->
-                                          gen_server:call(Worker, {find, Model, normalize_conditions(Conditions)})
-                                  end).
+    Attributes = Model:module_info(attributes),
+    Poolnames = proplists:get_value(backend, Attributes, []),
+    lists:foldl(
+      fun({Poolname, _Args}, Results) ->
+              Worker = poolboy:checkout(Poolname),
+              Res = gen_server:call(Worker, {find, Model, normalize_conditions(Conditions)}),
+              poolboy:checkin(Poolname, Worker),
+              Res ++ Results
+      end,
+      [], Poolnames).
 
-delete(Model) when is_tuple(Model) ->
-    Poolname = Model:backend(),
-    poolboy:transaction(Poolname, fun(Worker) ->
-                                          gen_server:call(Worker, {delete, Model})
-                                  end).
+delete(Object) when is_tuple(Object) ->
+    %% Let's build ourself the conditons
+    Model = element(1, Object),
+    Fields = proplists:get_value(fields, Model:module_info(attributes), []),
+    [_|Values] = erlang:tuple_to_list(Object),
+    Conditions = lists:zipwith(fun({Fieldname, _, _}, Value) ->
+                                       {Fieldname, Value}
+                               end, Fields, Values),
+    io:format("delete(~p, ~p)~n", [Model, Conditions]),
+    delete(Model, Conditions).
 
 delete(Model, Conditions) when is_atom(Model) ->
-    Poolname = Model:backend(),
-    poolboy:transaction(Poolname, fun(Worker) ->
-                                          gen_server:call(Worker, {delete, Model, normalize_conditions(Conditions)})
-                                  end).
+    Poolnames = proplists:get_value(backend, Model:module_info(attributes), []),
+    lists:foreach(
+      fun({Poolname, _Args}) ->
+              Worker = poolboy:checkout(Poolname),
+              gen_server:call(Worker, {delete, Model, normalize_conditions(Conditions)}),
+              poolboy:checkin(Poolname, Worker)
+      end, Poolnames).
+
 
 save(Model) when is_tuple(Model) ->
     Modelname = element(1, Model),
     Attributes = Modelname:module_info(attributes),
-    [Poolname] = proplists:get_value(backend, Attributes),
+    [{Poolname, _PoolArgs}] = proplists:get_value(backend, Attributes),
 
-    poolboy:transaction(Poolname, fun(Worker) ->
-                                          gen_server:call(Worker, {save, Model})
-                                  end).
-
-create_table(Model) ->
-    PoolName = Model:backend(),
-    poolboy:transaction(PoolName,
-                        fun(Worker) ->
-                                gen_server:call(Worker, {create_table, Model})
-                        end).
-
-transaction(Model) ->
-    PoolName = Model:backend(),
-    poolboy:transaction(PoolName,
-                        fun(Worker) ->
-                                gen_server:call(Worker, {transaction, Model})
-                        end).
-
+    Worker = poolboy:checkout(Poolname),
+    Res = gen_server:call(Worker, {save, Model}),
+    poolboy:checkin(Poolname, Worker),
+    Res.
 
 normalize_conditions(Conditions) ->
     normalize_conditions(Conditions, []).
