@@ -90,6 +90,8 @@ parse([#'FIELD'{name = Name, type = Type, arguments = Args}|Tl], State = #state{
     ParsedArgs = [ parse_args(Arg) || Arg <- Args ],
     parse(Tl, State#state{abs_tree_flds = [{unwrap(Name), unwrap(Type), ParsedArgs}|AbsTree]}).
 
+parse_args(#'FIELD_REF'{model = Model, field = Field}) ->
+    {target, {parse_args(Model), parse_args(Field)}};
 parse_args({Arg1, Arg2}) ->
     {parse_args(Arg1), parse_args(Arg2)};
 parse_args({_, _, Val}) ->
@@ -131,17 +133,12 @@ generate_functions(Modelname, State = #state{out_dir = OutDir, record_decl = Rec
     %% We need to include the record-definition. This is a bit ugly, but the preprocessor seems unwilling to help us include the same definition :(
     {ok, Tokens, _} = erl_scan:string(RecordStr),
     %% We need to split the forms.
-    FunctionsAST =
-        case FunctionsStr of
-            [FStr] ->
-                {ok, FuncTs, _} = erl_scan:string(FStr),
-                {ok, FuncDef} = erl_parse:parse_form(FuncTs),
-                [FuncDef];
-            _ ->
-                []
-        end,
+    FunctionsAST = rebuild_functions(FunctionsStr, Modelname, State#state.abs_tree_flds),
     {ok, RecordDefinition} = erl_parse:parse_form(Tokens),
     io:format("FuncDef: ~p~n", [FunctionsAST]),
+
+    AssociationsAST = build_associations(Modelname, State#state.abs_tree_flds),
+
     AST =
         [
          %% Header
@@ -175,15 +172,19 @@ generate_functions(Modelname, State = #state{out_dir = OutDir, record_decl = Rec
          erl_syntax:function(erl_syntax:atom("dummy"),
                              [erl_syntax:clause(none,
                                                 [ erl_syntax:record_expr(erl_syntax:atom(Modelname), []) ])])
-        ] ++ FunctionsAST,
+        ] ++ AssociationsAST,
+
     Forms = [ erl_syntax:revert(Form) || Form <- AST ],
-    case compile:forms(Forms) of
+    io:format("Resultat: ~n~p~n", [Forms++FunctionsAST]),
+    case compile:forms(Forms ++ FunctionsAST) of
         {ok,ModuleName,Binary} ->
+            code:load_binary(ModuleName, "", Binary),
             BeamFilename = filename:join([OutDir, atom_to_list(ModuleName) ++ ".beam"]),
             erl_db_log:msg(info, "Compiled model at: ~p", [BeamFilename]),
             file:write_file(BeamFilename, Binary),
             {ok, BeamFilename};
         {ok,ModuleName,Binary,Warnings} ->
+            code:load_binary(ModuleName, "", Binary),
             erl_db_log:msg(warning, "Compiled ~p with warnings: ~p", [ModuleName, Warnings]),
             BeamFilename = filename:join([OutDir, atom_to_list(ModuleName) ++ ".beam"]),
             erl_db_log:msg(info, "Compiled model at: ~p", [BeamFilename]),
@@ -198,6 +199,103 @@ generate_functions(Modelname, State = #state{out_dir = OutDir, record_decl = Rec
     end.
 
 
+
+build_associations(_Modelname, []) ->
+    [];
+build_associations(Modelname, [{Fieldname, one_to_one, Args}|Tl]) ->
+    %% This function should call erl_db:find_first/2 instead.
+    {Model, Field} = proplists:get_value(target, Args),
+    [erl_syntax:function(erl_syntax:atom(Fieldname),
+                         [erl_syntax:clause(
+                            [erl_syntax:variable("Model")], none,
+                            [
+                             erl_syntax:application(erl_syntax:atom(erl_db),
+                                                    erl_syntax:atom(find),
+                                                    [
+                                                     erl_syntax:atom(Model),
+                                                     erl_syntax:list(
+                                                       [erl_syntax:tuple(
+                                                          [erl_syntax:atom(Field),
+                                                           erl_syntax:record_access(erl_syntax:variable("Model"),
+                                                                                    erl_syntax:atom(Modelname),
+                                                                                    erl_syntax:atom(Fieldname))]
+                                                         )])])])])|build_associations(Modelname, Tl)];
+build_associations(Modelname, [{Fieldname, one_to_many, Args}|Tl]) ->
+    {Model, Field} = proplists:get_value(target, Args),
+    case code:is_loaded(Modelname) of
+        false ->
+            %% Try to load the code
+            case code:load_file(Modelname) of
+                {error, _, _} ->
+                    %% We should compile this shiet somehow :(
+                    ok;
+                {module, _} ->
+                    %% We won! \:D/
+                    ok
+            end;
+        _ ->
+            %% It's loaded
+            ok
+    end,
+    Fields = proplists:get_value(fields, Model:module_info(attributes)),
+    {ForeignKeyField, _, ForeignKeyFieldArgs} = lists:keyfind(foreign_key, 2, Fields),
+    [erl_syntax:function(erl_syntax:atom(Fieldname),
+                         [erl_syntax:clause(
+                            [erl_syntax:variable("Model")], none,
+                            [
+                             erl_syntax:application(erl_syntax:atom(erl_db),
+                                                    erl_syntax:atom(find),
+                                                    [
+                                                     erl_syntax:atom(Model),
+                                                     erl_syntax:list(
+                                                       [erl_syntax:tuple(
+                                                          [erl_syntax:atom(Field),
+                                                           erl_syntax:record_access(erl_syntax:variable("Model"),
+                                                                                    erl_syntax:atom(Modelname),
+                                                                                    erl_syntax:atom(Fieldname))]
+                                                         )])])])])|build_associations(Modelname, Tl)];
+
+build_associations(Modelname, [_Hd|Tl]) ->
+    build_associations(Modelname, Tl).
+
+
+rebuild_functions([FunctionsStr], Modelname, Fields) ->
+    %% First we build the field-access variable
+    FieldAccessor =
+        erl_syntax:record_expr(none, erl_syntax:atom(Modelname),
+                               lists:map(fun({Field, _Type, _Args}) ->
+                                                 erl_syntax:record_field(erl_syntax:atom(Field), erl_syntax:variable(atom_to_var(Field)))
+                                                     %%erl_syntax:infix_expr(erl_syntax:atom(Field), erl_syntax:operator('='), erl_syntax:variable(atom_to_var(Field)))
+                                         end, Fields)),
+
+    {ok, Ts, _} = erl_scan:string(FunctionsStr),
+    FunTokens = split_on_dot(Ts, [], []),
+    Res = lists:map(
+            fun(FunToken) ->
+                    {ok, Result} = erl_parse:parse_form(FunToken),
+                    rebuild_function(Result, FieldAccessor)
+            end, FunTokens),
+    Res.
+
+rebuild_function({function, _, FunName, _, [{clause, _, Args, Guards, Body}]}, FieldAccessor) ->
+    ModelVar = [erl_syntax:revert(FieldAccessor)],
+    {function, 0, FunName, 1, [{clause, 0, Args ++ ModelVar, Guards, Body}]};
+rebuild_function(Other, _) ->
+    Other.
+
+split_on_dot([], Acc, _CurrentDot) ->
+    Acc;
+split_on_dot([Hd={dot, _}|Tl], Acc, CurrentDot) ->
+    split_on_dot(Tl, [lists:reverse([Hd|CurrentDot])|Acc], []);
+split_on_dot([Hd|Tl], Acc, CurrentDot) ->
+    split_on_dot(Tl, Acc, [Hd|CurrentDot]).
+
+atom_to_var(Atom) when is_atom(Atom) ->
+    atom_to_var(atom_to_list(Atom));
+atom_to_var([FirstChar|Tl]) when FirstChar > 96 andalso FirstChar < 123 ->
+    [FirstChar-32|Tl];
+atom_to_var(String) when is_list(String) ->
+    String.
 
 convert_val_to_syntax({atom, _Line, Value}) ->
     convert_val_to_syntax(Value);
@@ -217,6 +315,8 @@ convert_val_to_syntax(String) when is_list(String) ->
     erl_syntax:string(String);
 convert_val_to_syntax(Float) when is_float(Float) ->
     erl_syntax:float(Float);
+convert_val_to_syntax({target, {Key, Val}}) ->
+    erl_syntax:tuple([erl_syntax:atom(target), convert_val_to_syntax({Key, Val})]);
 convert_val_to_syntax({Key, Val}) ->
     erl_syntax:tuple([convert_val_to_syntax(Key), convert_val_to_syntax(Val)]).
 
@@ -233,5 +333,6 @@ convert_to_erl_type(integer) ->
     "integer()";
 convert_to_erl_type(float) ->
     "float()";
-convert_to_erl_type(_) ->
+convert_to_erl_type(Type) ->
+    io:format("~p~n", [Type]),
     "any()".
