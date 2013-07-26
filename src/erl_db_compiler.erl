@@ -135,8 +135,6 @@ generate_functions(Modelname, State = #state{out_dir = OutDir, record_decl = Rec
     %% We need to split the forms.
     FunctionsAST = rebuild_functions(FunctionsStr, Modelname, State#state.abs_tree_flds),
     {ok, RecordDefinition} = erl_parse:parse_form(Tokens),
-    io:format("FuncDef: ~p~n", [FunctionsAST]),
-
     AssociationsAST = build_associations(Modelname, State#state.abs_tree_flds),
 
     AST =
@@ -175,8 +173,7 @@ generate_functions(Modelname, State = #state{out_dir = OutDir, record_decl = Rec
         ] ++ AssociationsAST,
 
     Forms = [ erl_syntax:revert(Form) || Form <- AST ],
-    io:format("Resultat: ~n~p~n", [Forms++FunctionsAST]),
-    case compile:forms(Forms ++ FunctionsAST) of
+    case compile:forms(Forms ++ FunctionsAST, [report_errors]) of
         {ok,ModuleName,Binary} ->
             code:load_binary(ModuleName, "", Binary),
             BeamFilename = filename:join([OutDir, atom_to_list(ModuleName) ++ ".beam"]),
@@ -260,26 +257,23 @@ build_associations(Modelname, [_Hd|Tl]) ->
 
 
 rebuild_functions([FunctionsStr], Modelname, Fields) ->
-    %% First we build the field-access variable
     FieldAccessor =
         erl_syntax:record_expr(none, erl_syntax:atom(Modelname),
-                               lists:map(fun({Field, _Type, _Args}) ->
-                                                 erl_syntax:record_field(erl_syntax:atom(Field), erl_syntax:variable(atom_to_var(Field)))
-                                                     %%erl_syntax:infix_expr(erl_syntax:atom(Field), erl_syntax:operator('='), erl_syntax:variable(atom_to_var(Field)))
-                                         end, Fields)),
+                               [erl_syntax:record_field(erl_syntax:atom(Field),
+                                                        erl_syntax:variable(atom_to_var(Field))) || {Field, _, _} <- Fields]),
+    FieldAccessor2 = [erl_syntax:revert(FieldAccessor)],
 
     {ok, Ts, _} = erl_scan:string(FunctionsStr),
     FunTokens = split_on_dot(Ts, [], []),
     Res = lists:map(
             fun(FunToken) ->
                     {ok, Result} = erl_parse:parse_form(FunToken),
-                    rebuild_function(Result, FieldAccessor)
+                    rebuild_function(Result, FieldAccessor2)
             end, FunTokens),
     Res.
 
-rebuild_function({function, _, FunName, _, [{clause, _, Args, Guards, Body}]}, FieldAccessor) ->
-    ModelVar = [erl_syntax:revert(FieldAccessor)],
-    {function, 0, FunName, 1, [{clause, 0, Args ++ ModelVar, Guards, Body}]};
+rebuild_function(A = {function, F1, FunName, Arity, [{clause, C1, Args, Guards, Body}]}, FieldAccessors) ->
+    {function, F1, FunName, Arity+1, [{clause, C1, Args ++ FieldAccessors, Guards, Body}]};
 rebuild_function(Other, _) ->
     Other.
 
@@ -334,5 +328,4 @@ convert_to_erl_type(integer) ->
 convert_to_erl_type(float) ->
     "float()";
 convert_to_erl_type(Type) ->
-    io:format("~p~n", [Type]),
     "any()".
