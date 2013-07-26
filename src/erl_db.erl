@@ -1,11 +1,19 @@
 -module(erl_db).
 
 -export([
+         start/1,
+         stop/0,
          find/2,
          delete/1,
          delete/2,
          save/1
         ]).
+
+start(_Args) ->
+    application:start(erl_db).
+
+stop() ->
+    application:stop(erl_db).
 
 find(Model, Conditions) ->
     Attributes = Model:module_info(attributes),
