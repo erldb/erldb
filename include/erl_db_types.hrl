@@ -1,27 +1,18 @@
--record('MODEL', {
-          imports,
-          version,
-          name,
-          backend,
-          fields,
-          functions
-         }).
-
--record('VERSION', {
-          value
-         }).
-
--record('IMPORT', {
-          model
-         }).
-
--record('BACKEND', {
-          name,
+-record('ATTRIBUTE', {
+          key,
+          value,
           arguments
          }).
+
 
 -record('FIELD', {
           name,
           type,
           arguments
+         }).
+
+
+-record('FIELD_REF', {
+          model,
+          field
          }).
