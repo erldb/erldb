@@ -19,7 +19,7 @@ find_models() ->
 compile_models([], Acc) ->
     rebar_log:log(info, "Done...~n", []);
 compile_models([File|Files], Acc) ->
-    erl_db_compiler:compile(File),
+    erl_db_compiler:compile(get_path() ++ File),
     rebar_log:log(info, "Created ~p...~n", [File]),
     compile_models(Files, [File|Acc]).
 
