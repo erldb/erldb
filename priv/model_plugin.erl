@@ -19,20 +19,9 @@ find_models() ->
 compile_models([], Acc) ->
     rebar_log:log(info, "Done...~n", []);
 compile_models([File|Files], Acc) ->
-    case file:read_file(get_path() ++ File) of
-        {ok, BinStr} ->
-            Str = erlang:binary_to_list(BinStr),
-            {ok, Tokens, _Len} = erl_db_lex:string(Str),
-            {ok, ST} = erl_db_parser:parse(Tokens),
-            {ok, Module} = erl_db_compiler:compile(ST),
-            rebar_log:log(info, "Created ~p...~n", [Module]),
-            file:copy(Module, "ebin/" ++ Module),
-            file:delete(Module),
-            compile_models(Files, [Module|Acc]);
-        Error ->
-            io:format("File: ~p~nPath: ~p~nError: ~p~n", [File, get_path(), Error]),
-            compile_models(Files, Acc)
-    end.
+    erl_db_compile:compile(File),
+    rebar_log:log(info, "Created ~p...~n", [File]),
+    compile_models(Files, [File|Acc]).
 
 get_path() ->
     {ok, Dir} = file:get_cwd(),
