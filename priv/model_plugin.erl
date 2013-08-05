@@ -36,4 +36,4 @@ compile_models([File|Files], Acc) ->
 
 get_path() ->
     {ok, Dir} = file:get_cwd(),
-    filename:join([Dir,"models/"]).
+    filename:join([Dir,"models"]) ++ "/".
