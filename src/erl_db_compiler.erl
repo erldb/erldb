@@ -256,6 +256,8 @@ build_associations(Modelname, [_Hd|Tl]) ->
     build_associations(Modelname, Tl).
 
 
+rebuild_functions([], _, _) ->
+    [];
 rebuild_functions([FunctionsStr], Modelname, Fields) ->
     FieldAccessor =
         erl_syntax:record_expr(none, erl_syntax:atom(Modelname),
