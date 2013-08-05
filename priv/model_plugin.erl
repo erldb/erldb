@@ -30,7 +30,7 @@ compile_models([File|Files], Acc) ->
             file:delete(Module),
             compile_models(Files, [Module|Acc]);
         Error ->
-            io:format("~p~n", [Error]),
+            io:format("Path: ~p~nError: ~p~n", [get_path(), Error]),
             compile_models(Files, Acc)
     end.
 
