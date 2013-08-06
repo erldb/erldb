@@ -3,6 +3,7 @@
 -export([model/2]).
 
 model(_,_) ->
+    application:load(erl_db),
     {ok, Filenames} = find_models(),
     code:add_path("ebin"),
     rebar_log:log(info, "Files: ~p~n", [Filenames]),
