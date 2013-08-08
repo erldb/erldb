@@ -10,7 +10,8 @@
          find/2,
          delete/1,
          delete/2,
-         save/1
+         save/1,
+         get_models/1
         ]).
 
 start(_Args) ->
@@ -26,6 +27,9 @@ stop() ->
 %% @end
 %%--------------------------------------------------------------------
 find(Model, Conditions) ->
+    find(Model, Conditions, []).
+
+find(Model, Conditions, Options) ->
     Attributes = Model:module_info(attributes),
     Poolnames = proplists:get_value(backend, Attributes, []),
     lists:foldl(
@@ -34,11 +38,11 @@ find(Model, Conditions) ->
               NormalizedConditions = normalize_conditions(Conditions),
               case is_conditions_supported(Worker, NormalizedConditions) of
                   ok ->
-                      Res = gen_server:call(Worker, {find, Model, normalize_conditions(Conditions)}),
+                      Res = gen_server:call(Worker, {find, Model, normalize_conditions(Conditions), Options}),
                       poolboy:checkin(Poolname, Worker),
                       Res ++ Results;
                   {not_supported, Operator} ->
-                      erl_db_log:msg(error, "Backend beloning to '~p' does not support query operator '~p'", [Model, Operator]),
+                      erl_db_log:msg(error, "'~p' does not support query operator '~p'", [Model, Operator]),
                       poolboy:checkin(Poolname, Worker),
                       Results
               end
@@ -95,7 +99,27 @@ save(Object) when is_tuple(Object) ->
     poolboy:checkin(Poolname, Worker),
     Res.
 
-
+%%--------------------------------------------------------------------
+%% @doc Gets all models that's beloning to a specific, named, backend
+%% @spec get_models(Backend :: atom()) -> [ Modelname :: atom() ].
+%% @end
+%%--------------------------------------------------------------------
+get_models(Backend) when is_atom(Backend) ->
+    LoadedModules = [ X || {X, _} <- code:all_loaded() ],
+    lists:filter(
+      fun(Modulename) ->
+              case proplists:get_value(backend, Modulename:module_info(attributes)) of
+                  undefined ->
+                      false;
+                  Backendlist ->
+                      lists:any(
+                        fun({ModelBackend, _}) when Backend == ModelBackend ->
+                                true;
+                           (_) ->
+                                false
+                        end, Backendlist)
+              end
+      end, LoadedModules).
 
 %%---------------------------------------
 %% INTERNAL FUNCTIONS
