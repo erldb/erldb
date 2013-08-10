@@ -11,6 +11,7 @@
          delete/1,
          delete/2,
          save/1,
+         read/2,
          get_models/1
         ]).
 
@@ -99,6 +100,18 @@ save(Object) when is_tuple(Object) ->
     poolboy:checkin(Poolname, Worker),
     Res.
 
+%%--------------------------------------------------------------------
+%% @doc Saves the specified 'Object' to the database.
+%% @spec save(Object :: tuple()) -> ok | {error, Reason}
+%% @end
+%%--------------------------------------------------------------------
+read(Modelname, Key) ->
+    Attributes = Modelname:module_info(attributes),
+    [{Poolname, _PoolArgs}] = proplists:get_value(backend, Attributes),
+    Worker = poolboy:checkout(Poolname),
+    Res = gen_server:call(Worker, {read, Modelname, Key}),
+    poolboy:checkin(Poolname, Worker),
+    Res.
 %%--------------------------------------------------------------------
 %% @doc Gets all models that's beloning to a specific, named, backend
 %% @spec get_models(Backend :: atom()) -> [ Modelname :: atom() ].
