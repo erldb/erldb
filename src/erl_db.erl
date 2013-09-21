@@ -78,8 +78,7 @@ delete(Model, Conditions) when is_atom(Model) ->
                   ok ->
                       gen_server:call(Worker, {delete, Model, NormalizedConditions});
                   {not_supported, Operator} ->
-                      erl_db_log:msg(error, "Backend beloning to '~p' does not support query operator '~p'", [Model, Operator]),
-                      {error, {not_supported, Operator, Model}}
+                      erl_db_log:msg(error, "Backend beloning to '~p' does not support query operator '~p'", [Model, Operator])
               end,
               poolboy:checkin(Poolname, Worker)
       end, Poolnames).

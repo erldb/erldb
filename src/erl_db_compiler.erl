@@ -235,7 +235,7 @@ build_associations(Modelname, [{Fieldname, one_to_many, Args}|Tl]) ->
             ok
     end,
     Fields = proplists:get_value(fields, Model:module_info(attributes)),
-    {ForeignKeyField, _, ForeignKeyFieldArgs} = lists:keyfind(foreign_key, 2, Fields),
+    {_ForeignKeyField, _, _ForeignKeyFieldArgs} = lists:keyfind(foreign_key, 2, Fields),
     [erl_syntax:function(erl_syntax:atom(Fieldname),
                          [erl_syntax:clause(
                             [erl_syntax:variable("Model")], none,
@@ -274,7 +274,7 @@ rebuild_functions([FunctionsStr], Modelname, Fields) ->
             end, FunTokens),
     Res.
 
-rebuild_function(A = {function, F1, FunName, Arity, [{clause, C1, Args, Guards, Body}]}, FieldAccessors) ->
+rebuild_function({function, F1, FunName, Arity, [{clause, C1, Args, Guards, Body}]}, FieldAccessors) ->
     {function, F1, FunName, Arity+1, [{clause, C1, Args ++ FieldAccessors, Guards, Body}]};
 rebuild_function(Other, _) ->
     Other.
@@ -329,5 +329,5 @@ convert_to_erl_type(integer) ->
     "integer()";
 convert_to_erl_type(float) ->
     "float()";
-convert_to_erl_type(Type) ->
+convert_to_erl_type(_Type) ->
     "any()".
