@@ -144,7 +144,9 @@ generate_functions(Modelname, State = #state{out_dir = OutDir, record_decl = Rec
                               [erl_syntax:atom(Modelname)])] ++
         [
          %% Fields attribute
-         erl_syntax:attribute(erl_syntax:atom(fields), [ erl_syntax:list( lists:reverse([ erl_syntax:tuple([ erl_syntax:atom(Fieldname), erl_syntax:atom(Fieldvalue), convert_val_to_syntax(FieldArgs)]) || {Fieldname, Fieldvalue, FieldArgs} <- State#state.abs_tree_flds ]) ) ])
+         erl_syntax:attribute(erl_syntax:atom(fields), [ erl_syntax:list(
+                                                           build_field_attribute(lists:reverse(State#state.abs_tree_flds), 2)
+                                                          ) ])
         ] ++
         [
          %% Backend attribute
@@ -195,6 +197,14 @@ generate_functions(Modelname, State = #state{out_dir = OutDir, record_decl = Rec
             erl_db_log:msg(error, "Could not compile model: ~p. Exited with errors: ~p~n", [Errors])
     end.
 
+
+build_field_attribute([], _) -> [];
+build_field_attribute([{FieldName, FieldValue, FieldArgs}|Tl], Index) ->
+    [erl_syntax:tuple([
+                       erl_syntax:atom(FieldName),
+                       erl_syntax:atom(FieldValue),
+                       convert_val_to_syntax(FieldArgs),
+                       erl_syntax:integer(Index)])|build_field_attribute(Tl, Index+1)].
 
 
 build_associations(_Modelname, []) ->
