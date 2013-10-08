@@ -28,7 +28,7 @@ init([]) ->
     PoolSpecs = lists:map(fun({Name, Type, SizeArgs, WorkerArgs}) ->
                                   PoolArgs = [{name, {local, Name}},
                                               {worker_module, Type},
-                                              {worker_args, WorkerArgs}
+                                              {worker_args, [{db_name, Name}, {db_type, Type}|WorkerArgs]}
                                              ] ++ SizeArgs,
                                   {Name, {poolboy, start_link, [PoolArgs]}, permanent, 5000, worker, [poolboy]}
                           end, Pools),
