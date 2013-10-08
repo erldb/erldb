@@ -24,7 +24,7 @@ stop() ->
 %%--------------------------------------------------------------------
 %% @doc Searches for models with the given conditions
 %%
-%% @spec find(Model :: atom(), Conditions :: [{atom(), any()}]) -> list()
+%% @spec find(Model :: atom(), Conditions :: [{Field :: atom(), Op :: atom(), Val :: any()}]) -> list()
 %% @end
 %%--------------------------------------------------------------------
 find(Model, Conditions) ->
@@ -39,9 +39,9 @@ find(Model, Conditions, Options) ->
               NormalizedConditions = normalize_conditions(Conditions),
               case is_conditions_supported(Worker, NormalizedConditions) of
                   ok ->
-                      Res = gen_server:call(Worker, {find, Model, normalize_conditions(Conditions), Options}),
+                      {ok, Res} = gen_server:call(Worker, {find, Model, normalize_conditions(Conditions), Options}),
                       poolboy:checkin(Poolname, Worker),
-                      Res ++ Results;
+                      Res;
                   {not_supported, Operator} ->
                       erl_db_log:msg(error, "'~p' does not support query operator '~p'", [Model, Operator]),
                       poolboy:checkin(Poolname, Worker),
