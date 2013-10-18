@@ -58,6 +58,8 @@ There is an experimental rebar plugin but it's still a bit unstable so for testi
        ################## info ###################
        Compiled model at: "ebin/tags.beam"
 
+#Usage
+
 Now you have a file "tags.hrl" in your include directory that's the record-definition of your model.
 
        1> application:start(erl_db).
@@ -75,7 +77,3 @@ If your configuration for the backend is correct the record is now saved to the 
        [#tags{id = 1,tag = "world"},
         #tags{id = 2,tag = "world"},
         #tags{id = 4,tag = "world"}]
-
-#Usage
-
-TBW
