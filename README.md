@@ -46,7 +46,35 @@ arguments are specific to [poolboy](https://github.com/devinus/poolboy). The fou
 
 #Compilation of modules
 
-TBW
+There is an experimental rebar plugin but it's still a bit unstable so for testing purpose you'll have to use the erlang console.
+
+       $ erl -pa ebin deps/*/ebin
+       Erlang R16B01 (erts-5.10.2) [source] [smp:8:8] [async-threads:10] [hipe] [kernel-poll:false]
+
+       Eshell V5.10.2  (abort with ^G)
+       1> erl_db_compiler:compile("examples/tags.model").
+       ################## info ###################
+       Saved field-declaration file in "include/tags.hrl"
+       ################## info ###################
+       Compiled model at: "ebin/tags.beam"
+
+Now you have a file "tags.hrl" in your include directory that's the record-definition of your model.
+
+       1> application:start(erl_db).
+       ...
+       2> rr("include/tags.hrl").
+       [tags]
+       3> A = #tags{}.
+       #tags{id = id,tag = "world"}
+       4> A:save().
+       {ok,#tags{id = 4,tag = "world"}}
+
+If your configuration for the backend is correct the record is now saved to the database and can be searched for;
+
+       5> erl_db:find(tags, [{tag, "world"}]).
+       [#tags{id = 1,tag = "world"},
+        #tags{id = 2,tag = "world"},
+        #tags{id = 4,tag = "world"}]
 
 #Usage
 
