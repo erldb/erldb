@@ -30,7 +30,7 @@ get_fields_with_type_aux(FieldType, [_Hd|Tl]) ->
     get_fields_with_type_aux(FieldType, Tl).
 
 get_field(_Fieldname, []) -> {error, not_found};
-get_field(Fieldname, [Field = {Fieldname, FieldType, FieldArgs, FieldIndex}|_Tl]) -> {ok, Field};
+get_field(Fieldname, [Field = {Fieldname, _FieldType, _FieldArgs, _FieldIndex}|_Tl]) -> {ok, Field};
 get_field(Fieldname, [_Hd|Tl]) -> get_field(Fieldname, Tl).
 
 
