@@ -1,5 +1,4 @@
-
--module(erl_db_sup).
+-module(erldb_sup).
 
 -behaviour(supervisor).
 
@@ -24,7 +23,7 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-    Pools = erl_db_env:get_env(erl_db, db_pools, []),
+    Pools = erldb_env:get_env(erldb, db_pools, []),
     PoolSpecs = lists:map(fun({Name, Type, SizeArgs, WorkerArgs}) ->
                                   PoolArgs = [{name, {local, Name}},
                                               {worker_module, Type},

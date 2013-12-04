@@ -1,4 +1,4 @@
--module(erl_db_init).
+-module(erldb_init).
 
 -export([start/0]).
 
@@ -8,7 +8,7 @@
 start() ->
     Models = read_models(),
     start_backends(Models),
-    erl_db_mnesia:info().
+    erldb_mnesia:info().
 
 -spec read_models() -> list(atom()) | [].
 read_models() ->
@@ -50,10 +50,10 @@ start_backends([H|T], Acc) ->
 
 -spec init_backend(atom()) -> ok.
 init_backend(mnesia) ->
-    erl_db_mnesia:init().
+    erldb_mnesia:init().
 
 -spec setup_models(atom(), Model) -> ok when
       Model :: atom().
 setup_models(mnesia, Model) ->
     io:format("  Setting up ~p...~n", [Model]),
-    erl_db_mnesia:init_table(Model).
+    erldb_mnesia:init_table(Model).

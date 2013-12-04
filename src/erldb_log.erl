@@ -1,4 +1,4 @@
--module(erl_db_log).
+-module(erldb_log).
 
 -export([msg/2, msg/3]).
 
