@@ -1,4 +1,4 @@
--module(erl_db_app).
+-module(erldb_app).
 
 -behaviour(application).
 
@@ -11,7 +11,7 @@
 
 start(_StartType, _StartArgs) ->
     application:start(lager),
-    erl_db_sup:start_link().
+    erldb_sup:start_link().
 
 stop(_State) ->
     ok.

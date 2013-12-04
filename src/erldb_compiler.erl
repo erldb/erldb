@@ -1,6 +1,6 @@
--module(erl_db_compiler).
+-module(erldb_compiler).
 
--include("../include/erl_db_types.hrl").
+-include("../include/erldb_types.hrl").
 
 -export([
          compile/1,
@@ -27,7 +27,7 @@ compile(Filename, Options) when is_list(Filename) ->
     %% This is a bit ugly, but it's one method we can use to enable erlang functions in our models
     [ModelInfo|Functions] = re:split(Str, "functions:", [{return, list}]),
     {ok, Tokens, _} = erl_scan:string(ModelInfo),
-    {ok, Tree} = erl_db_parser:parse(Tokens),
+    {ok, Tree} = erldb_parser:parse(Tokens),
     compile_tree(Tree, Functions, Options).
 
 compile_tree(Tree, Functions, Options) ->
@@ -38,7 +38,7 @@ compile_tree(Tree, Functions, Options) ->
     RecordStr = generate_hrl(State),
     file:make_dir(IncludeDir),
     ok = file:write_file(filename:join([IncludeDir, atom_to_list(Name) ++ ".hrl"]), RecordStr),
-    erl_db_log:msg(info, "Saved field-declaration file in ~p", [filename:join([IncludeDir, atom_to_list(Name) ++ ".hrl"])]),
+    erldb_log:msg(info, "Saved field-declaration file in ~p", [filename:join([IncludeDir, atom_to_list(Name) ++ ".hrl"])]),
     generate_functions(Name, State#state{record_decl = RecordStr, functions_str = Functions}),
     ok.
 
@@ -47,13 +47,13 @@ parse([List], State) when is_list(List) -> parse(List, State);
 
 parse([#'ATTRIBUTE'{key = {atom, _, 'backend'}, value = {atom, Line, Value}, arguments = Args}|Tl], State = #state{abs_tree_attr = AbsTree}) ->
     %% We might want to warn the user if using a backend that isn't defined
-    ConfigBackends = erl_db_env:get_env(erl_db, db_pools, []),
+    ConfigBackends = erldb_env:get_env(erldb, db_pools, []),
     ValidBackend = [ X || {X, _, _, _} <- ConfigBackends, X == Value ],
     case length(ValidBackend) of
         1 ->
             ok;
         _ ->
-            erl_db_log:msg(warning, "Could not find the specified backend-config. Declared as ~p on line ~p", [Value, Line])
+            erldb_log:msg(warning, "Could not find the specified backend-config. Declared as ~p on line ~p", [Value, Line])
     end,
     parse(Tl, State#state{backend = {Value, Args}, abs_tree_attr = [{backend, Value}|AbsTree]});
 
@@ -65,7 +65,7 @@ parse([#'FIELD'{name = Name, type = {atom, Line, foreign_key}, arguments = Args}
     Target = lists:filter(fun(#'FIELD_REF'{}) -> true; (_) -> false end, Args),
     case Target of
         [] ->
-            erl_db_log:msg(error, "No target specified for foreign key ~p, declared on line ~p", [unwrap(Name), Line]),
+            erldb_log:msg(error, "No target specified for foreign key ~p, declared on line ~p", [unwrap(Name), Line]),
             throw({error, reference_not_found});
         [#'FIELD_REF'{model = {atom, _, Model}, field = {atom, _, Field}}] ->
             case code:is_loaded(Model) of
@@ -80,7 +80,7 @@ parse([#'FIELD'{name = Name, type = {atom, Line, foreign_key}, arguments = Args}
                     ok;
                 _ ->
                     %% Warn the user
-                    erl_db_log:msg(warning, "Could not find specified field ~p in the model ~p.", [Field, Model]),
+                    erldb_log:msg(warning, "Could not find specified field ~p in the model ~p.", [Field, Model]),
                     ok
             end,
             parse(Tl, State#state{abs_tree_flds = [{foreign_key, Model, Field}|AbsTree]})
@@ -161,12 +161,12 @@ generate_functions(Modelname, State = #state{out_dir = OutDir, record_decl = Rec
          %% Save function
          erl_syntax:function(erl_syntax:atom("save"),
                              [erl_syntax:clause(
-                                [erl_syntax:variable("Model")], none, [erl_syntax:application(erl_syntax:atom(erl_db), erl_syntax:atom(save), [ erl_syntax:variable("Model") ])])]),
+                                [erl_syntax:variable("Model")], none, [erl_syntax:application(erl_syntax:atom(erldb), erl_syntax:atom(save), [ erl_syntax:variable("Model") ])])]),
 
          %% Delete function
          erl_syntax:function(erl_syntax:atom("delete"),
                              [erl_syntax:clause(
-                                [erl_syntax:variable("Model")], none, [erl_syntax:application(erl_syntax:atom(erl_db), erl_syntax:atom(delete), [ erl_syntax:variable("Model") ])])]),
+                                [erl_syntax:variable("Model")], none, [erl_syntax:application(erl_syntax:atom(erldb), erl_syntax:atom(delete), [ erl_syntax:variable("Model") ])])]),
 
          %% Dummy function. This is used to create an empty object. This should have all the fields set to undefined
          erl_syntax:function(erl_syntax:atom("dummy"),
@@ -179,22 +179,22 @@ generate_functions(Modelname, State = #state{out_dir = OutDir, record_decl = Rec
         {ok,ModuleName,Binary} ->
             code:load_binary(ModuleName, "", Binary),
             BeamFilename = filename:join([OutDir, atom_to_list(ModuleName) ++ ".beam"]),
-            erl_db_log:msg(info, "Compiled model at: ~p", [BeamFilename]),
+            erldb_log:msg(info, "Compiled model at: ~p", [BeamFilename]),
             file:write_file(BeamFilename, Binary),
             {ok, BeamFilename};
         {ok,ModuleName,Binary,Warnings} ->
             code:load_binary(ModuleName, "", Binary),
-            erl_db_log:msg(warning, "Compiled ~p with warnings: ~p", [ModuleName, Warnings]),
+            erldb_log:msg(warning, "Compiled ~p with warnings: ~p", [ModuleName, Warnings]),
             BeamFilename = filename:join([OutDir, atom_to_list(ModuleName) ++ ".beam"]),
-            erl_db_log:msg(info, "Compiled model at: ~p", [BeamFilename]),
+            erldb_log:msg(info, "Compiled model at: ~p", [BeamFilename]),
             file:write_file(BeamFilename, Binary),
             {ok, BeamFilename};
         error ->
-            erl_db_log:msg(error, "Error in compilation for model ~p.", [Modelname]);
+            erldb_log:msg(error, "Error in compilation for model ~p.", [Modelname]);
         {error, Reason} ->
-            erl_db_log:msg(error, "Error in compilation: ~p", [Reason]);
+            erldb_log:msg(error, "Error in compilation: ~p", [Reason]);
         {error, Errors, _Warnings} ->
-            erl_db_log:msg(error, "Could not compile model: ~p. Exited with errors: ~p~n", [Errors])
+            erldb_log:msg(error, "Could not compile model: ~p. Exited with errors: ~p~n", [Errors])
     end.
 
 
@@ -210,13 +210,13 @@ build_field_attribute([{FieldName, FieldValue, FieldArgs}|Tl], Index) ->
 build_associations(_Modelname, []) ->
     [];
 build_associations(Modelname, [{Fieldname, one_to_one, Args}|Tl]) ->
-    %% This function should call erl_db:find_first/2 instead.
+    %% This function should call erldb:find_first/2 instead.
     {Model, Field} = proplists:get_value(target, Args),
     [erl_syntax:function(erl_syntax:atom(Fieldname),
                          [erl_syntax:clause(
                             [erl_syntax:variable("Model")], none,
                             [
-                             erl_syntax:application(erl_syntax:atom(erl_db),
+                             erl_syntax:application(erl_syntax:atom(erldb),
                                                     erl_syntax:atom(find),
                                                     [
                                                      erl_syntax:atom(Model),
@@ -250,7 +250,7 @@ build_associations(Modelname, [{Fieldname, one_to_many, Args}|Tl]) ->
                          [erl_syntax:clause(
                             [erl_syntax:variable("Model")], none,
                             [
-                             erl_syntax:application(erl_syntax:atom(erl_db),
+                             erl_syntax:application(erl_syntax:atom(erldb),
                                                     erl_syntax:atom(find),
                                                     [
                                                      erl_syntax:atom(Model),

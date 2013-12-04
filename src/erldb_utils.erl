@@ -5,7 +5,7 @@
 %%% @end
 %%% Created :  7 Oct 2013 by Niclas Axelsson <niclas@burbasconsulting.com>
 %%%-------------------------------------------------------------------
--module(erl_db_utils).
+-module(erldb_utils).
 
 -export([
          get_fields/1,

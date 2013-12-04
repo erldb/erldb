@@ -1,4 +1,4 @@
-{application, erl_db,
+{application, erldb,
  [
   {description, "Erlang ORM"},
   {vsn, "0.0.1"},

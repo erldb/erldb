@@ -1,9 +1,9 @@
 %%% @author Niclas Axelsson <niclas@burbas.se>
 %%% @doc
-%%% The main interface for erl_db
+%%% The main interface for erldb
 %%% @end
 %%% Created : 26 Jul 2013 by Niclas Axelsson <niclas@burbas.se>
--module(erl_db).
+-module(erldb).
 -export([
          start/1,
          stop/0,
@@ -16,10 +16,10 @@
         ]).
 
 start(_Args) ->
-    application:start(erl_db).
+    application:start(erldb).
 
 stop() ->
-    application:stop(erl_db).
+    application:stop(erldb).
 
 %%--------------------------------------------------------------------
 %% @doc Searches for models with the given conditions
@@ -43,7 +43,7 @@ find(Model, Conditions, Options) ->
                       poolboy:checkin(Poolname, Worker),
                       Res;
                   {not_supported, Operator} ->
-                      erl_db_log:msg(error, "'~p' does not support query operator '~p'", [Model, Operator]),
+                      erldb_log:msg(error, "'~p' does not support query operator '~p'", [Model, Operator]),
                       poolboy:checkin(Poolname, Worker),
                       Results
               end
@@ -79,7 +79,7 @@ delete(Model, Conditions) when is_atom(Model) ->
                   ok ->
                       gen_server:call(Worker, {delete, Model, NormalizedConditions});
                   {not_supported, Operator} ->
-                      erl_db_log:msg(error, "Backend beloning to '~p' does not support query operator '~p'", [Model, Operator])
+                      erldb_log:msg(error, "Backend beloning to '~p' does not support query operator '~p'", [Model, Operator])
               end,
               poolboy:checkin(Poolname, Worker)
       end, Poolnames).

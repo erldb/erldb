@@ -1,4 +1,4 @@
--module(erl_db_env).
+-module(erldb_env).
 -export([get_env/3]).
 
 
