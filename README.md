@@ -1,5 +1,11 @@
-# Erl_DB
+# erldb
+
 ORM (Object-relational mapping) application implemented in Erlang.
+
+# Rework
+
+Right now we are aiming todo a 0.1 release. When it is done we will
+write new readme on how it works.
 
 # Model files
 Check 'testmodel.model' in the examples/ directory
