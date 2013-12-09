@@ -110,7 +110,7 @@ clean-all: clean clean-deps clean-docs
 	$(gen_verbose) rm -rf .$(PROJECT).plt $(DEPS_DIR) logs
 
 app: ebin/$(PROJECT).app
-        $(eval MODULES := $(shell find ebin -type f -name \*.beam \
+	$(eval MODULES := $(shell find ebin -type f -name \*.beam \
 		| sed 's/ebin\///;s/\.beam/,/' | sed '$$s/.$$//'))
 	$(appsrc_verbose) cat src/$(PROJECT).app.src \
 		| sed 's/{modules,[[:space:]]*\[\]}/{modules, \[$(MODULES)\]}/' \
@@ -143,7 +143,7 @@ ebin/$(PROJECT).app: $(shell find src -type f -name \*.erl) \
                 $(shell find src -type f -name \*.xrl) \
                 $(shell find src -type f -name \*.yrl) \
                 $(shell find templates -type f -name \*.dtl 2>/dev/null)
-        @mkdir -p ebin/
+	@mkdir -p ebin/
         $(if $(strip $(filter %.erl %.core,$?)), \
                 $(call compile_erl,$(filter %.erl %.core,$?)))
         $(if $(strip $(filter %.xrl %.yrl,$?)), \
@@ -152,7 +152,7 @@ ebin/$(PROJECT).app: $(shell find src -type f -name \*.erl) \
                 $(call compile_dtl,$(filter %.dtl,$?)))
 
 clean:
-        $(gen_verbose) rm -rf ebin/ test/*.beam erl_crash.dump
+	$(gen_verbose) rm -rf ebin/ test/*.beam erl_crash.dump
 
 # Dependencies.
 
@@ -174,10 +174,10 @@ $(DEPS_DIR)/$(1):
         $(call get_dep,$(1))
 endef
 
-$(foreach dep,$(DEPS),$(eval $(call dep_target,$(dep))))
+	$(foreach dep,$(DEPS),$(eval $(call dep_target,$(dep))))
 
 deps: $(ALL_DEPS_DIRS)
-        @for dep in $(ALL_DEPS_DIRS) ; do \
+	@for dep in $(ALL_DEPS_DIRS) ; do \
                 if [ -f $$dep/Makefile ] ; then \
                         $(MAKE) -C $$dep ; \
                 else \
@@ -186,7 +186,7 @@ deps: $(ALL_DEPS_DIRS)
         done
 
 clean-deps:
-        @for dep in $(ALL_DEPS_DIRS) ; do \
+	@for dep in $(ALL_DEPS_DIRS) ; do \
                 if [ -f $$dep/Makefile ] ; then \
                         $(MAKE) -C $$dep clean ; \
                 else \
@@ -199,21 +199,21 @@ clean-deps:
 EDOC_OPTS ?=
 
 docs: clean-docs
-        $(gen_verbose) erl -noshell \
+	$(gen_verbose) erl -noshell \
                 -eval 'edoc:application($(PROJECT), ".", [$(EDOC_OPTS)]), init:stop().'
 
 clean-docs:
-        $(gen_verbose) rm -f doc/*.css doc/*.html doc/*.png doc/edoc-info
+	$(gen_verbose) rm -f doc/*.css doc/*.html doc/*.png doc/edoc-info
 
 # Tests.
 
 $(foreach dep,$(TEST_DEPS),$(eval $(call dep_target,$(dep))))
 
 build-test-deps: $(ALL_TEST_DEPS_DIRS)
-        @for dep in $(ALL_TEST_DEPS_DIRS) ; do $(MAKE) -C $$dep; done
+	@for dep in $(ALL_TEST_DEPS_DIRS) ; do $(MAKE) -C $$dep; done
 
 build-tests: build-test-deps
-        $(gen_verbose) erlc -v $(ERLC_OPTS) -o test/ \
+	$(gen_verbose) erlc -v $(ERLC_OPTS) -o test/ \
                 $(wildcard test/*.erl test/*/*.erl) -pa ebin/
 
 CT_RUN = ct_run \
@@ -241,12 +241,12 @@ $(foreach test,$(CT_SUITES),$(eval $(call test_target,$(test))))
 
 tests: ERLC_OPTS += -DTEST=1 +'{parse_transform, eunit_autoexport}'
 tests: clean deps app build-tests
-        @if [ -d "test" ] ; \
+	@if [ -d "test" ] ; \
         then \
                 mkdir -p logs/ ; \
                 $(CT_RUN) -suite $(addsuffix _SUITE,$(CT_SUITES)) ; \
         fi
-        $(gen_verbose) rm -f test/*.beam
+	$(gen_verbose) rm -f test/*.beam
 
 # Dialyzer.
 
@@ -255,11 +255,11 @@ DIALYZER_OPTS ?= -Werror_handling -Wrace_conditions \
         -Wunmatched_returns # -Wunderspecs
 
 build-plt: deps app
-        @dialyzer --build_plt --output_plt .$(PROJECT).plt \
+	@dialyzer --build_plt --output_plt .$(PROJECT).plt \
                 --apps erts kernel stdlib $(PLT_APPS) $(ALL_DEPS_DIRS)
 
 dialyze:
-        @dialyzer --src src --plt .$(PROJECT).plt --no_native $(DIALYZER_OPTS)
+	@dialyzer --src src --plt .$(PROJECT).plt --no_native $(DIALYZER_OPTS)
 
 # Packages.
 
