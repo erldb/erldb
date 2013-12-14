@@ -20,3 +20,27 @@ To generate documentation of erldb:
 ```
   $ make docs
 ```
+
+## Make and run dialyzer
+
+### Build plt
+```
+  $ make build-plt
+```
+
+### Run dialyzer
+```
+  $ make dialyzer
+```
+
+## Build and run tests
+
+### Build tests
+```
+  $ make build-tests
+```
+
+### Run tests
+```
+  $ make tests
+```
