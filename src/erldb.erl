@@ -12,12 +12,22 @@
          stop/0,
          find/2,
          delete/1,
-         save/1,
+         save/1
         ]).
 
+%%--------------------------------------------------------------------
+%% @doc Starts the erldb application
+%%
+%% @end
+%%--------------------------------------------------------------------
 start(_Args) ->
     application:start(erldb).
 
+%%--------------------------------------------------------------------
+%% @doc Stops the erldb application
+%%
+%% @end
+%%--------------------------------------------------------------------
 stop() ->
     application:stop(erldb).
 
@@ -27,27 +37,25 @@ stop() ->
 %% @spec find(Model :: atom(), Conditions :: [{Field :: atom(), Op :: atom(), Val :: any()}]) -> list()
 %% @end
 %%--------------------------------------------------------------------
+-spec find(atom(), [tuple()]) -> {ok, list()} | {error, atom()}.
 find(Model, Conditions) ->
     find(Model, Conditions, []).
 
 find(Model, Conditions, Options) ->
     Attributes = Model:module_info(attributes),
-    [Poolnames|_] = proplists:get_value(backend, Attributes, []),
-    lists:foldl(
-      fun({Poolname, _Args}, Results) ->
-              Worker = poolboy:checkout(Poolname),
-              case gen_server:call(Worker, {supported_condition, Conditions}) of
-                  ok ->
-                      {ok, Res} = gen_server:call(Worker, {find, Model, Conditions, Options}),
-                      poolboy:checkin(Poolname, Worker),
-                      Res;
-                  {not_supported, Operator} ->
-                      erldb_log:msg(error, "'~p' does not support query operator '~p'", [Model, Operator]),
-                      poolboy:checkin(Poolname, Worker),
-                      Results
-              end
-      end,
-      [], Poolnames).
+    [{Poolname, _Args}|_] = proplists:get_value(backend, Attributes, []),
+
+    Worker = poolboy:checkout(Poolname),
+    Result =
+        case gen_server:call(Worker, {supported_condition, Conditions}) of
+            ok ->
+                gen_server:call(Worker, {find, Model, Conditions, Options});
+            {not_supported, Operator} ->
+                erldb_log:msg(error, "'~p' does not support query operator '~p'", [Model, Operator]),
+                {error, op_not_supported}
+        end,
+    poolboy:checkin(Poolname, Worker),
+    Result.
 
 %%--------------------------------------------------------------------
 %% @doc Deletes the specified 'Object'.
@@ -71,8 +79,8 @@ delete(Object) when is_tuple(Object) ->
 
     case Proceed of
         ok ->
-            lists:foldl(
-              fun({Poolname, Arguments}, Results) ->
+            lists:map(
+              fun({Poolname, Arguments}) ->
                       Worker = poolboy:checkout(Poolname),
                       Res = gen_server:call(Worker, {delete, Object, Arguments}),
                       poolboy:checkin(Poolname, Worker),
@@ -125,7 +133,7 @@ save(Object) when is_tuple(Object) ->
 %%--------------------------------------------------------------------
 -spec update(tuple()) -> {ok, tuple()} | {stopped, tuple()} | {error, atom()}.
 update(Object) when is_tuple(Object) ->
-    Module = elemnent(1, Object),
+    Module = element(1, Object),
     {Proceed, NewObject} =
         case erlang:function_exported(Module, '_pre_update', 1) of
             true ->
@@ -143,14 +151,14 @@ update(Object) when is_tuple(Object) ->
         case Proceed of
             {ok, _} ->
                 Res =
-                    lists:foldl(
-                      fun({Poolname, Arguments}, Results) ->
+                    lists:map(
+                      fun({Poolname, Arguments}) ->
                               Worker = poolboy:checkout(Poolname),
                               Res = gen_server:call(Worker, {update, NewObject, Arguments}),
                               poolboy:checkin(Poolname, Worker),
                               Res
                       end, proplists:get_value(backend, Module:module_info(attributes, []))),
-                lists:any(fun({ok, _}) -> true; (_) -> false end, Res),
+                lists:any(fun({ok, _}) -> true; (_) -> false end, Res);
             _ ->
                 []
         end,
@@ -163,7 +171,7 @@ update(Object) when is_tuple(Object) ->
         {_, {error, Reason}} ->
             {error, Reason};
         _ ->
-            {ok, New}
+            {ok, NewObject}
     end.
 
 %%--------------------------------------------------------------------
@@ -186,9 +194,10 @@ insert(Object) when is_tuple(Object) ->
                 end;
             _ ->
                 %% @TODO Update the object. Should return in format {ok, Object} or {error, Reason}
+                ok
         end,
 
-    case {Proceed, erlang:function_exported(Module, '_post_insert', 1)) of
+    case {Proceed, erlang:function_exported(Module, '_post_insert', 1)} of
         {stop, _} ->
             {stopped, Object};
         {ok, true} ->
