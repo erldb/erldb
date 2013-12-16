@@ -20,7 +20,8 @@
           attributes = [],
           body = [],
           outdir = "",
-          includedir = ""
+          includedir = "",
+          fc = 2 %% Field counter. Starts on 2 since 1 contains the record-name
          }).
 
 %%--------------------------------------------------------------------
@@ -64,10 +65,12 @@ do_compile(Filename, ModelState = #model_state{name = Modelname, includedir = In
 %% @end
 %%--------------------------------------------------------------------
 -spec post_parse(tuple(), #model_state{}) -> #model_state{}.
-post_parse(A = {attribute, _R0, field, {Name, Type, Arguments}}, State = #model_state{
+post_parse({attribute, R0, field, {Name, Type, Arguments}}, State = #model_state{
                                                                    attributes = Attributes,
-                                                                   fields = Fields}) ->
-    State#model_state{fields = [{Name, Type, Arguments}|Fields], attributes = [A|Attributes]};
+                                                                   fields = Fields,
+                                                                   fc = FC}) ->
+    A = {attribute, R0, field, {Name, FC, Type, Arguments}},
+    State#model_state{fields = [{Name, Type, Arguments}|Fields], attributes = [A|Attributes], FC+1};
 post_parse(A = {attribute, _R0, backend, {NamedBackend, Arguments}}, State = #model_state{
                                                                        attributes = Attributes,
                                                                        backends = Backends}) ->
