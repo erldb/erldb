@@ -70,7 +70,7 @@ post_parse({attribute, R0, field, {Name, Type, Arguments}}, State = #model_state
                                                                    fields = Fields,
                                                                    fc = FC}) ->
     A = {attribute, R0, field, {Name, FC, Type, Arguments}},
-    State#model_state{fields = [{Name, Type, Arguments}|Fields], attributes = [A|Attributes], FC+1};
+    State#model_state{fields = [{Name, Type, Arguments}|Fields], attributes = [A|Attributes], fc = FC+1};
 post_parse(A = {attribute, _R0, backend, {NamedBackend, Arguments}}, State = #model_state{
                                                                        attributes = Attributes,
                                                                        backends = Backends}) ->
