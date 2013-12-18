@@ -61,7 +61,6 @@ do_compile(Filename, ModelState = #model_state{name = Modelname, includedir = In
 
 %%--------------------------------------------------------------------
 %% @doc Divides all the forms into lists grouped by type.
-%% @spec post_parse(Token, #model_state{}) -> #model_state{}.
 %% @end
 %%--------------------------------------------------------------------
 -spec post_parse(tuple(), #model_state{}) -> #model_state{}.
@@ -80,7 +79,6 @@ post_parse(Element, State = #model_state{body = Body}) ->
 
 %%--------------------------------------------------------------------
 %% @doc Fixes the attributes so it can be handled by erl_parse.
-%% @spec pre_parse([Tokens], false | {true, [Tokens]}) -> [Tokens].
 %% @end
 %%--------------------------------------------------------------------
 -spec pre_parse([Tokens], false | {true, [Tokens]}) -> [Tokens].
@@ -110,7 +108,6 @@ pre_parse([Hd|Tl], false) ->
 
 %%--------------------------------------------------------------------
 %% @doc Rebuilds all the functions to accept record-definition as argument.
-%% @spec rebuild_functions([tuple()], atom(), [tuple()]) -> [tuple()].
 %% @end
 %%--------------------------------------------------------------------
 -spec rebuild_functions([tuple()], atom(), [tuple()]) -> [tuple()].
@@ -132,7 +129,6 @@ rebuild_functions(Functions, Modelname, Fields) ->
 
 %%--------------------------------------------------------------------
 %% @doc Rebuilds function to accept record-definition as argument.
-%% @spec rebuild_function(tuple(), [tuple()]) -> tuple().
 %% @end
 %%--------------------------------------------------------------------
 -spec rebuild_function(tuple(), [tuple()]) -> tuple().
@@ -143,7 +139,6 @@ rebuild_function(Other, _) ->
 
 %%--------------------------------------------------------------------
 %% @doc Generates a record definition from a set of fields.
-%% @spec generate_hrl(atom(), [{atom(), atom(), [{atom(), any()}|atom()}]) -> string().
 %% @end
 %%--------------------------------------------------------------------
 -spec generate_hrl(atom(), [{atom(), atom(), [{atom(), any()}|atom()]}]) -> string().
@@ -226,7 +221,6 @@ generate_beam(#model_state{
 
 %%--------------------------------------------------------------------
 %% @doc Splits a list of tokens into list with a single form.
-%% @spec split_on_dot([Tokens], [Tokens], [Tokens]) -> [Tokens].
 %% @end
 %%--------------------------------------------------------------------
 -spec split_on_dot([Tokens], [Tokens], [Tokens]) -> [Tokens].
@@ -239,7 +233,6 @@ split_on_dot([Hd|Tl], Acc, CurrentDot) ->
 
 %%--------------------------------------------------------------------
 %% @doc Converts a type from the model specification to an erlang dito.
-%% @spec convert_to_erl_type(atom()) -> string()
 %% @end
 %%--------------------------------------------------------------------
 -spec convert_to_erl_type(atom()) -> string().

@@ -34,7 +34,6 @@ stop() ->
 %%--------------------------------------------------------------------
 %% @doc Searches for models with the given conditions
 %%
-%% @spec find(Model :: atom(), Conditions :: [{Field :: atom(), Op :: atom(), Val :: any()}]) -> list()
 %% @end
 %%--------------------------------------------------------------------
 -spec find(atom(), [tuple()]) -> {ok, list()} | {error, atom()}.
@@ -59,7 +58,6 @@ find(Model, Conditions, Options) ->
 
 %%--------------------------------------------------------------------
 %% @doc Deletes the specified 'Object'.
-%% @spec delete(Object :: tuple()) -> {ok, DeletedObjects :: integer()}
 %% @end
 %%--------------------------------------------------------------------
 delete(Object) when is_tuple(Object) ->
@@ -106,7 +104,6 @@ delete(Object) when is_tuple(Object) ->
 
 %%--------------------------------------------------------------------
 %% @doc Saves the specified 'Object' to the database.
-%% @spec save(tuple()) -> {ok, tuple()} | {stopped, tuple()} | {error, atom()}.
 %% @end
 %%--------------------------------------------------------------------
 -spec save(tuple()) -> {ok, tuple()} | {stopped, tuple()} | {error, atom()}.
@@ -128,7 +125,6 @@ save(Object) when is_tuple(Object) ->
 
 %%--------------------------------------------------------------------
 %% @doc Performs an update operation for an object
-%% @spec update(tuple()) -> {ok, tuple()} | {stopped, tuple()} | {error, atom()}.
 %% @end
 %%--------------------------------------------------------------------
 -spec update(tuple()) -> {ok, tuple()} | {stopped, tuple()} | {error, atom()}.
@@ -176,7 +172,6 @@ update(Object) when is_tuple(Object) ->
 
 %%--------------------------------------------------------------------
 %% @doc Performs an insert operation for an object
-%% @spec insert(tuple()) -> {ok, tuple()} | {stopped, tuple()} | {error, atom()}.
 %% @end
 %%--------------------------------------------------------------------
 -spec insert(tuple()) -> {ok, tuple()} | {stopped, tuple()} | {error, atom()}.
