@@ -60,6 +60,7 @@ find(Model, Conditions, Options) ->
 %% @doc Deletes the specified 'Object'.
 %% @end
 %%--------------------------------------------------------------------
+-spec delete(tuple()) -> ok.
 delete(Object) when is_tuple(Object) ->
     Module = element(1, Object),
     Proceed =
@@ -164,8 +165,6 @@ update(Object) when is_tuple(Object) ->
             {stopped, Object};
         {ok, true} ->
             Module:'_post_update'(NewObject, UpdateRes);
-        {_, {error, Reason}} ->
-            {error, Reason};
         _ ->
             {ok, NewObject}
     end.
