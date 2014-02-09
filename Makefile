@@ -4,7 +4,7 @@ PROJECT = erldb
 
 # Options
 
-PLT_APPS = crypto public_key ssl
+PLT_APPS = kernel stdlib asn1 crypto public_key ssl
 
 # Dependencies
 

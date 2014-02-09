@@ -7,7 +7,7 @@
 -spec start() -> ok.
 start() ->
     Models = read_models(),
-    start_backends(Models),
+    _Backends = start_backends(Models),
     erldb_mnesia:info().
 
 -spec read_models() -> list(atom()) | [].

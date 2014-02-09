@@ -53,7 +53,7 @@ do_compile(Filename, ModelState = #model_state{name = Modelname, includedir = In
             {ok, GenHrl} = erl_parse:parse(element(2, erl_scan:string(Hrl))),
 
             %% Save the HRL-file
-            file:write_file(filename:join([IncludeDir, Modelname++".hrl"]), Hrl),
+            ok = file:write_file(filename:join([IncludeDir, Modelname++".hrl"]), Hrl),
             generate_beam(ModelState2, GenHrl);
         Error ->
             Error
@@ -211,9 +211,9 @@ generate_beam(#model_state{
     Forms = [ erl_syntax:revert(Form) || Form <- AST ],
     case compile:forms(Forms, [report_errors]) of
         {ok, ModuleName, Binary} ->
-            code:load_binary(ModuleName, "", Binary),
+            _Module = code:load_binary(ModuleName, "", Binary),
             BeamFilename = filename:join([atom_to_list(ModuleName) ++ ".beam"]),
-            file:write_file(BeamFilename, Binary),
+            ok = file:write_file(BeamFilename, Binary),
             {ok, BeamFilename};
         _ ->
             ok

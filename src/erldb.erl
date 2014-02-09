@@ -60,48 +60,46 @@ find(Model, Conditions, Options) ->
 %% @doc Deletes the specified 'Object'.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(tuple()) -> ok.
-delete(Object) when is_tuple(Object) ->
-    Module = element(1, Object),
-    Proceed =
-        case erlang:function_exported(Module, '_pre_delete', 1) of
-            true ->
-                case Module:'_pre_delete'(Object) of
-                    stop ->
-                        stop;
-                    _ ->
-                        ok
-                end;
-            _ ->
-                ok
-        end,
+-spec pre_delete(atom(), tuple()) -> stop | ok.
+pre_delete(Module, Object) ->
+    case erlang:function_exported(Module, '_pre_delete', 1) of
+	true ->
+	    case Module:'_pre_delete'(Object) of
+		stop ->
+		    stop;
+		_ ->
+		    ok
+	    end;
+	_ ->
+	    ok
+    end.
 
-    case Proceed of
-        ok ->
-            lists:map(
-              fun({Poolname, Arguments}) ->
-                      Worker = poolboy:checkout(Poolname),
-                      Res = gen_server:call(Worker, {delete, Object, Arguments}),
-                      poolboy:checkin(Poolname, Worker),
-                      Res
-              end, proplists:get_value(backend, Module:module_info(attributes, [])));
-        _ ->
-            ok
-    end,
-
-    case {Proceed, erlang:function_exported(Module, '_post_delete', 1)} of
-        {stop, _} ->
+-spec post_delete(atom(), tuple()) -> stop | ok.
+post_delete(Module, Object) ->
+    case erlang:function_exported(Module, '_post_delete', 1) of
+        false ->
             ok;
-        {_, true} ->
+        true ->
             case Module:'_post_delete'(Object) of
                 rollback ->
                     Object:save(); %% Save the object back to database
                 _ ->
                     ok
-            end;
-        _ ->
-            ok
+            end
     end.
+    
+-spec delete(tuple()) -> ok.
+delete(Object) when is_tuple(Object) ->
+    Module = element(1, Object),
+    Proceed = pre_delete(Module, Object),
+    case Proceed of
+	ok ->
+	    _List = from_all_backends(Module, Object),
+	    ok;
+	_ ->
+	    ok
+    end,
+    post_delete(Module, Object).
 
 %%--------------------------------------------------------------------
 %% @doc Saves the specified 'Object' to the database.
@@ -128,35 +126,29 @@ save(Object) when is_tuple(Object) ->
 %% @doc Performs an update operation for an object
 %% @end
 %%--------------------------------------------------------------------
+pre_update(Module, Object) ->
+    case erlang:function_exported(Module, '_pre_update', 1) of
+	true ->
+	    case Module:'_pre_update'(Object) of
+		stop ->
+		    {stop, undefined};
+		{ok, Obj} ->
+		    {ok, Obj}
+	    end;
+	_ ->
+	    {ok, Object}
+    end.
+
 -spec update(tuple()) -> {ok, tuple()} | {stopped, tuple()} | {error, atom()}.
 update(Object) when is_tuple(Object) ->
     Module = element(1, Object),
-    {Proceed, NewObject} =
-        case erlang:function_exported(Module, '_pre_update', 1) of
-            true ->
-                case Module:'_pre_update'(Object) of
-                    stop ->
-                        {stop, undefined};
-                    {ok, Obj} ->
-                        {ok, Obj}
-                end;
-            _ ->
-                {ok, Object}
-        end,
-
+    {Proceed, NewObject} = pre_update(Module, Object),
     UpdateRes =
         case Proceed of
-            {ok, _} ->
-                Res =
-                    lists:map(
-                      fun({Poolname, Arguments}) ->
-                              Worker = poolboy:checkout(Poolname),
-                              Res = gen_server:call(Worker, {update, NewObject, Arguments}),
-                              poolboy:checkin(Poolname, Worker),
-                              Res
-                      end, proplists:get_value(backend, Module:module_info(attributes, []))),
+            ok ->
+                Res = from_all_backends(Module, Object),
                 lists:any(fun({ok, _}) -> true; (_) -> false end, Res);
-            _ ->
+            stop ->
                 []
         end,
 
@@ -184,11 +176,11 @@ insert(Object) when is_tuple(Object) ->
                         {stop, undefined};
                     _ ->
                         %% @TODO Update the object. Should return in format {ok, Object} or {error, Reason}
-                        ok
+                        {ok, object}
                 end;
             _ ->
                 %% @TODO Update the object. Should return in format {ok, Object} or {error, Reason}
-                ok
+                {ok, object}
         end,
 
     case {Proceed, erlang:function_exported(Module, '_post_insert', 1)} of
@@ -196,8 +188,15 @@ insert(Object) when is_tuple(Object) ->
             {stopped, Object};
         {ok, true} ->
             Module:'_post_insert'(NewObject);
-        {_, {error, Reason}} ->
-            {error, Reason};
-        _ ->
+	_ ->
             {ok, NewObject}
     end.
+
+from_all_backends(Module, Object) ->
+    _List = lists:map(
+	      fun({Poolname, Arguments}) ->
+		      Worker = poolboy:checkout(Poolname),
+		      Res = gen_server:call(Worker, {delete, Object, Arguments}),
+		      poolboy:checkin(Poolname, Worker),
+		      Res
+	      end, proplists:get_value(backend, Module:module_info(attributes, []))).

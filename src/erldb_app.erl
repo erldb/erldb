@@ -10,7 +10,6 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
-    application:start(lager),
     erldb_sup:start_link().
 
 stop(_State) ->
