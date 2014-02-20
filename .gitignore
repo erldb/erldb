@@ -7,3 +7,4 @@ src/erl_db_parser.erl
 log/
 *.dump
 *.plt
+*.beam
