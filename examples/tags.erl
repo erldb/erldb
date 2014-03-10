@@ -5,6 +5,17 @@
 -field(text, string, []).
 -field(created, datetime, []).
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Functions
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+uppercase_title() ->
+    ic_util:to_uppercase(Title).
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% HOOKS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% Cancel update if text is undefined
 _pre_update(Object) ->
