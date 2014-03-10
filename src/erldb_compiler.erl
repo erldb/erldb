@@ -97,8 +97,8 @@ pre_parse([{var, R0, Name} = T0|Tl], false) ->
                   Hook == '_post_lookup' orelse
                   Hook == '_pre_delete' orelse
                   Hook == '_post_delete' orelse
-                  Hook == '_pre_save' orelse
-                  Hook == '_post_save' ->
+                  Hook == '_pre_insert' orelse
+                  Hook == '_post_insert' ->
             [{atom, R0, Name}|pre_parse(Tl, false)];
         _ ->
             [T0|pre_parse(Tl, false)]
