@@ -1,8 +1,0 @@
-name: blog_user
-vsn: 1.0
-backend: mnesia()
-
-fields:
-        id      :: primary_key(auto_increment)
-        'name'  :: string(desc="This is awsome")
-        created :: datetime()

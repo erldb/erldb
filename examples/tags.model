@@ -1,6 +1,0 @@
-name: tags
-backend: mnesia
-
-fields:
-    id :: primary_key(auto_increment)
-    tag :: string(default = "world", max_length = 255, index)
