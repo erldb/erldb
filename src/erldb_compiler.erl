@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
-%%% @author Niclas Axelsson <niclas@burbas.se> [http://www.burbas.se]
-%%% @copyright (C) 2013, Niclas Axelsson
+%%% @author Niclas Axelsson <niclas@burbasconsulting.se> [http://www.burbasconsulting.com]
+%%% @copyright (C) 2013-2014, Niclas Axelsson
 %%% @doc
 %%% Simple compiler for erldb models
 %%% @end
@@ -32,7 +32,13 @@
 compile(Filename) when is_list(Filename) ->
     compile(Filename, []).
 
-
+%%--------------------------------------------------------------------
+%% @doc Compiles a file with additional options.
+%% Options :: [Option]
+%% Option = {outdir, Path} |
+%%          {includedir, Path}
+%% @end
+%%--------------------------------------------------------------------
 compile(Filename, Options) ->
     %% Extract the filename
     Modelname = filename:rootname(filename:basename(Filename)),
