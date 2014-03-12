@@ -1,7 +1,8 @@
 #!/usr/bin/env escript
 %% -*- erlang -*-
 %%! -smp enable -sname compilemodel -pa ebin -config ./priv/compilemodel.config
-main([]) ->
-    Path = application:get_env(compilemodel),
-    Result = erldb_compiler:compile(Path),
-    io:format("Compiled:  ~p~n", [Result]).
+main([Path]) ->
+    {ok, Filenames} = file:list_dir(Path),
+    List = [erldb_compiler:compile(filename:join([Path, Model]), [{includedir, "./include"}, {outdir, "./ebin"}]) || Model <- Filenames],
+    io:format("~p~n", [List]).
+    
