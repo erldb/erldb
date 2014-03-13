@@ -47,7 +47,7 @@ compile(Filename, Options) ->
                                       name = Modelname}).
 
 
-do_compile(Filename, ModelState = #model_state{name = Modelname, includedir = IncludeDir}) ->
+do_compile(Filename, ModelState = #model_state{name = Modelname, includedir = IncludeDir, outdir = OutDir}) ->
     case file:read_file(Filename) of
         {ok, BinStr} ->
             {ok, Tokens, _EndLocation} = erl_scan:string(binary_to_list(BinStr)),
@@ -60,7 +60,7 @@ do_compile(Filename, ModelState = #model_state{name = Modelname, includedir = In
 
             %% Save the HRL-file
             ok = file:write_file(filename:join([IncludeDir, Modelname++".hrl"]), Hrl),
-            generate_beam(ModelState2, GenHrl);
+            generate_beam(ModelState2, GenHrl, OutDir);
         Error ->
             Error
     end.
@@ -181,7 +181,7 @@ generate_beam(#model_state{
                  fields = Fields,
                  attributes = Attributes,
                  body = Body},
-              RecordDefinition) ->
+              RecordDefinition, OutDir) ->
     Functions = rebuild_functions(Body, Name, Fields),
     %% Give the module a name
     AST =
@@ -219,7 +219,7 @@ generate_beam(#model_state{
         {ok, ModuleName, Binary} ->
             _Module = code:load_binary(ModuleName, "", Binary),
             BeamFilename = filename:join([atom_to_list(ModuleName) ++ ".beam"]),
-            ok = file:write_file(BeamFilename, Binary),
+            ok = file:write_file(filename:join([OutDir, BeamFilename]), Binary),
             {ok, BeamFilename};
         _ ->
             ok
