@@ -11,11 +11,11 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0]).
+-export([start_link/1]).
 -export([init_table/1,
-save/2,
-find/2,
-delete/2]).
+	 save/2,
+	 find/2,
+	 delete/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -29,14 +29,14 @@ terminate/2, code_change/3]).
 %%% API
 %%%===================================================================
 
-start_link() ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
+start_link(Args) ->
+    gen_server:start_link(?MODULE, Args, []).
 
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
 
-init([]) ->
+init(_Args) ->
     {ok, #state{}}.
 
 handle_call({init_table, Args}, _From, State) ->

@@ -7,7 +7,7 @@
                   kernel,
                   stdlib
                  ]},
-  {mod, { erl_db_app, []}},
+  {mod, { erldb_app, []}},
   {env, [{model_path, "examples/"},
-         {db_pools, [{mnesia, erl_db_mnesia, [{size, 10}, {max_overflow, 20}], [{type, ordered_set}]}]}]}
+         {db_pools, [{ets, erldb_ets, [{size, 10}, {max_overflow, 20}], [{type, ordered_set}]}]}]}
 ]}.
