@@ -104,7 +104,7 @@ ERLC_OPTS ?= -Werror +debug_info +warn_export_all +warn_export_vars \
 COMPILE_FIRST ?=
 COMPILE_FIRST_PATHS = $(addprefix src/,$(addsuffix .erl,$(COMPILE_FIRST)))
 
-all: deps app
+all: deps app model
 
 clean-all: clean clean-deps clean-docs
 	$(gen_verbose) rm -rf .$(PROJECT).plt $(DEPS_DIR) logs
@@ -115,6 +115,9 @@ app: ebin/$(PROJECT).app
 	$(appsrc_verbose) cat src/$(PROJECT).app.src \
 		| sed 's/{modules,[[:space:]]*\[\]}/{modules, \[$(MODULES)\]}/' \
 		> ebin/$(PROJECT).app
+
+model:
+	./priv/compilemodel
 
 define compile_erl
 	$(erlc_verbose) erlc -v $(ERLC_OPTS) -o ebin/ \
