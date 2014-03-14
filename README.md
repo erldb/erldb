@@ -28,6 +28,8 @@ To build erldb use Makefile to build.
   $ make
 ```
 
+make also builds your model that is in your application environment.
+
 ## Make documentation
 To generate documentation of erldb:
 
