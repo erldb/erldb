@@ -6,19 +6,27 @@ ORM (Object-relational mapping) application implemented in Erlang.
 
 Check the ``examples/``-directory for example models. To compile the model tags.erl;
 ```
-  ~/erldb$ erl -pa ebin/
-  Erlang R16B01 (erts-5.10.2) [source] [smp:8:8] [async-threads:10] [hipe] [kernel-poll:false]
+  $ make
+   APP    poolboy.app.src
+   APP    erldb.app.src
+  ./priv/compilemodel
+  model_path: "examples/"
+  ################## "Start compiling" ###################
+  file "tags.erl"
+  ################## "Done compiling" ###################
+
+  $ erl -pa ebin/
+  Erlang R16B01 (erts-5.10.2) [source-bdf5300] [64-bit] [smp:4:4] [async-threads:10] [hipe] [kernel-poll:false]
 
   Eshell V5.10.2  (abort with ^G)
-  1> erldb_compiler:compile("examples/tags.erl").
-  {ok,"tags.beam"}
-  2> rr("tags.hrl").
+  1> rr("include/tags.hrl").
   [tags]
-  3> A = #tags{}.
+  2> A = #tags{}.
   #tags{id = undefined,title = "Fancy title",text = undefined,
-      created = undefined}
-  4> A:uppercase_title().
+        created = undefined}
+  3> A:uppercase_title().
   "FANCY TITLE"
+  4>
 ```
 
 # Build
