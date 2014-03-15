@@ -94,7 +94,7 @@ delete(Object) when is_tuple(Object) ->
     Proceed = pre_delete(Module, Object),
     case Proceed of
         ok ->
-            _List = from_all_backends(Module, Object),
+            _List = from_all_backends(delete, Module, Object),
             ok;
         _ ->
             ok
@@ -161,7 +161,7 @@ update(Object) when is_tuple(Object) ->
     UpdateRes =
         case Proceed of
             ok ->
-                Res = from_all_backends(Module, Object),
+                Res = from_all_backends(update, Module, Object),
                 lists:any(fun({ok, _}) -> true; (_) -> false end, Res);
             stop ->
                 []
@@ -205,11 +205,11 @@ insert(Object) when is_tuple(Object) ->
             {ok, NewObject}
     end.
 
-from_all_backends(Module, Object) ->
+from_all_backends(Action, Module, Object) ->
     _List = lists:map(
               fun({Poolname, Arguments}) ->
                       Worker = poolboy:checkout(Poolname),
-                      Res = gen_server:call(Worker, {delete, Object, Arguments}),
+                      Res = gen_server:call(Worker, {Action, Object, Arguments}),
                       poolboy:checkin(Poolname, Worker),
                       Res
               end, proplists:get_value(backend, Module:module_info(attributes))).

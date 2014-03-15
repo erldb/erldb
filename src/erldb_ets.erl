@@ -46,9 +46,14 @@ handle_call({init_table, Args}, _From, State) ->
     {reply, Result, State};
 handle_call({save, Table, Object}, _From, State) ->
     {reply, ets:insert(Table, Object), State};
+handle_call({update, Object, _}, _From, State) ->
+    Table = element(1, Object),
+    {reply, ets:insert(Table, Object), State};
 handle_call({find, Table, Key}, _From, State) ->
     {reply, ets:lookup(Table, Key), State};
-handle_call({delete, Table, Key}, _From, State) ->
+handle_call({delete, Object, _}, _From, State) ->
+    Table = element(1, Object),
+    Key = element(2, Object),
     {reply, ets:delete(Table, Key), State}.
     
 
