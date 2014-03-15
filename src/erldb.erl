@@ -109,11 +109,7 @@ delete(Object) when is_tuple(Object) ->
 save(Object) when is_tuple(Object) ->
     Module = element(1, Object),
     %% Determine if this is an insert or an update
-    [PrimaryKey] =
-        lists:filter(
-          fun({field, [{_, _, _, Arglist}]}) -> proplists:get_value(primary_key, Arglist, false); (_) -> false end,
-          Module:module_info(attributes)),
-    PrimaryKeyPos = element(2, PrimaryKey),
+    PrimaryKeyPos = primary_key_pos(Module:module_info(attributes), 1),
     case element(PrimaryKeyPos, Object) of
         'id' ->
             %% This is an insertion
@@ -128,6 +124,18 @@ save(Object) when is_tuple(Object) ->
         _ ->
             update(Object)
     end.
+
+primary_key_pos([], N) ->
+    N;
+primary_key_pos([{field, _, _, Arglist}|T], N) ->
+    case lists:member(primary_key, Arglist) of
+	true ->
+	    primary_key_pos([], N+1);
+	false ->
+	    primary_key_pos([T], N+1)
+    end;
+primary_key_pos([_|T],N) ->
+    primary_key_pos(T, N).
 
 %%--------------------------------------------------------------------
 %% @doc Performs an update operation for an object
@@ -204,4 +212,4 @@ from_all_backends(Module, Object) ->
                       Res = gen_server:call(Worker, {delete, Object, Arguments}),
                       poolboy:checkin(Poolname, Worker),
                       Res
-              end, proplists:get_value(backend, Module:module_info(attributes, []))).
+              end, proplists:get_value(backend, Module:module_info(attributes))).

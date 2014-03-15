@@ -4,6 +4,7 @@ PROJECT = erldb
 
 # Options
 
+CT_SUITES = erldb_ets
 PLT_APPS = kernel stdlib asn1 crypto public_key ssl
 
 # Dependencies

@@ -1,10 +1,10 @@
 %%%-------------------------------------------------------------------
-%%% @author daniel <>
-%%% @copyright (C) 2014, daniel
+%%% @author Daniel Hallin Widgren <daniel.widgren@gmail.com>
+%%% @copyright (C) 2014, Daniel Hallin Widgren
 %%% @doc
-%%%
+%%% Erldb ets worker
 %%% @end
-%%% Created : 24 Feb 2014 by daniel <>
+%%% Created : 24 Feb 2014 by Daniel Hallin Widgren <daniel.widgren@gmail.com>
 %%%-------------------------------------------------------------------
 -module(erldb_ets).
 
