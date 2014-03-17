@@ -9,5 +9,7 @@
                  ]},
   {mod, { erldb_app, []}},
   {env, [{model_path, "examples/"},
-         {db_pools, [{ets, erldb_ets, [{size, 10}, {max_overflow, 20}], [{type, ordered_set}]}]}]}
+         {db_pools, [{ets, [{worker, erldb_ets},
+			    {poolboy_config, [{size, 10}, {max_overflow, 20}]},
+			    {default_table_options, [{type, ordered_set}]}]}]}]}
 ]}.

@@ -10,7 +10,11 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
+    {ok, Path} = application:get_env(erldb, model_path),
+    {ok, Models} = file:list_dir_all(Path),
+    erldb_init:ensure_tables(Models),
     erldb_sup:start_link().
+
 
 stop(_State) ->
     ok.

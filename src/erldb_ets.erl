@@ -12,7 +12,7 @@
 
 %% API
 -export([start_link/1]).
--export([init_table/1,
+-export([init_table/2,
 	 save/2,
 	 find/2,
 	 delete/2]).
@@ -39,8 +39,7 @@ start_link(Args) ->
 init(_Args) ->
     {ok, #state{}}.
 
-handle_call({init_table, Args}, _From, State) ->
-    Name = proplists:get_value(name, Args),
+handle_call({init_table, Name, Args}, _From, State) ->
     Options = proplists:get_value(options, Args, []),
     Result = ets:new(Name, Options),
     {reply, Result, State};
@@ -73,8 +72,8 @@ code_change(_OldVsn, State, _Extra) ->
 %%% External API
 %%%===================================================================
 
-init_table(Args) ->
-    gen_server:call(?SERVER, {init_table, Args}).
+init_table(Name, Args) ->
+    gen_server:call(?SERVER, {init_table, Name, Args}).
 save(Table, Object) ->
     gen_server:call(?SERVER, {save, Table, Object}).
 find(Table, Key) ->
