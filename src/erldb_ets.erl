@@ -40,8 +40,7 @@ init(_Args) ->
     {ok, #state{}}.
 
 handle_call({init_table, Name, Args}, _From, State) ->
-    Options = proplists:get_value(options, Args, []),
-    Result = ets:new(Name, Options),
+    Result = ets:new(Name, Args),
     {reply, Result, State};
 handle_call({save, Table, Object}, _From, State) ->
     {reply, ets:insert(Table, Object), State};
