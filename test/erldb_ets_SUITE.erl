@@ -171,6 +171,8 @@ save(_Config) ->
     Tags = #tags{id=1, title="test"},
     {ok, Tags} = erldb:save(Tags).
 find(_Config) -> 
-    true.
+    Tags = #tags{id=1, title="test"},
+    {ok, Tags} = erldb:find(tags, [{id, '=', 1}]).
 delete(_Config) -> 
-    true.
+    {ok, Tag} = erldb:find(tags, [{id, '=', 1}]),
+    {ok, _} = erldb:delete(Tag).

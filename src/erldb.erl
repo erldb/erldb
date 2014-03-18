@@ -47,9 +47,9 @@ find(Model, Conditions, Options) ->
     Worker = poolboy:checkout(Poolname),
     Result =
         case gen_server:call(Worker, {supported_condition, Conditions}) of
-            ok ->
+            {ok, supported} ->
                 gen_server:call(Worker, {find, Model, Conditions, Options});
-            {not_supported, Operator} ->
+            {error, not_supported, Operator} ->
                 erldb_log:msg(error, "'~p' does not support query operator '~p'", [Model, Operator]),
                 {error, op_not_supported}
         end,
