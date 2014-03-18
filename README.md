@@ -29,6 +29,11 @@ Check the ``examples/``-directory for example models. To compile the model tags.
   4>
 ```
 
+# Get workers
+
+You can list all erldb packages with ```make pkg-list```. You can also search packages via ```make pkg-search q=STRING```.
+To install a worker type ```make pkg-install q=PACKAGE```.
+
 # Build
 To build erldb use Makefile to build.
 
