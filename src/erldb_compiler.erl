@@ -13,14 +13,18 @@
          compile/2
         ]).
 
+-record(compiler_state, {
+          outdir = "",
+          includedir = "",
+          model_state
+         }).
+
 -record(model_state, {
           name = "",
           backends = [],
           fields = [],
           attributes = [],
           body = [],
-          outdir = "",
-          includedir = "",
           fc = 2 %% Field counter. Starts on 2 since 1 contains the record-name
          }).
 
@@ -42,25 +46,26 @@ compile(Filename) when is_list(Filename) ->
 compile(Filename, Options) ->
     %% Extract the filename
     Modelname = filename:rootname(filename:basename(Filename)),
-    do_compile(Filename, #model_state{outdir = proplists:get_value(outdir, Options, ""),
-                                      includedir = proplists:get_value(includedir, Options, "."),
-                                      name = Modelname}).
+    do_compile(Filename, #compiler_state{outdir = proplists:get_value(outdir, Options, "./ebin"),
+                                         includedir = proplists:get_value(includedir, Options, "./include"),
+                                         model_state = #model_state {name = Modelname}}).
 
 
-do_compile(Filename, ModelState = #model_state{name = Modelname, includedir = IncludeDir, outdir = OutDir}) ->
+do_compile(Filename, CompilerState = #compiler_state{includedir = IncludeDir,
+                                                     model_state = #model_state{name = Modelname}}) ->
     case file:read_file(Filename) of
         {ok, BinStr} ->
             {ok, Tokens, _EndLocation} = erl_scan:string(binary_to_list(BinStr)),
             Forms = split_on_dot(pre_parse(Tokens, false), [], []),
             ParsedForms = [ element(2, erl_parse:parse(X)) || X <- Forms ],
             ModelState2 = lists:foldl(fun(X, State) -> post_parse(X, State) end,
-                                      ModelState, ParsedForms),
+                                      CompilerState#compiler_state.model_state, ParsedForms),
             Hrl = generate_hrl(list_to_atom(Modelname), ModelState2#model_state.fields),
             {ok, GenHrl} = erl_parse:parse(element(2, erl_scan:string(Hrl))),
 
             %% Save the HRL-file
             ok = file:write_file(filename:join([IncludeDir, Modelname++".hrl"]), Hrl),
-            generate_beam(ModelState2, GenHrl, OutDir);
+            generate_beam(CompilerState#compiler_state{model_state = ModelState2}, GenHrl);
         Error ->
             Error
     end.
@@ -176,12 +181,13 @@ generate_hrl_fields([{Name, Type, Args}|Tl]) ->
             Res ++ ",\n" ++ generate_hrl_fields(Tl)
     end.
 
-generate_beam(#model_state{
-                 name = Name,
-                 fields = Fields,
-                 attributes = Attributes,
-                 body = Body},
-              RecordDefinition, OutDir) ->
+generate_beam(#compiler_state{outdir = OutDir,
+                              model_state = #model_state{
+                                name = Name,
+                                fields = Fields,
+                                attributes = Attributes,
+                                body = Body}},
+              RecordDefinition) ->
     Functions = rebuild_functions(Body, Name, Fields),
     %% Give the module a name
     AST =
