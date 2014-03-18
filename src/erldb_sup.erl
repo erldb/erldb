@@ -24,7 +24,7 @@ start_link() ->
 
 init([]) ->
     %% Gets the environment-variable for db_pools
-    Pools = erldb_env:get_env(erldb, db_pools, []),
+    Pools = application:get_env(erldb, db_pools),
 
     %% Start the workers
     PoolSpecs = lists:map(fun({Name, Type, SizeArgs, WorkerArgs}) ->
