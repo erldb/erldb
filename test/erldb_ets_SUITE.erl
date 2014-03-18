@@ -51,7 +51,14 @@ suite() ->
 %% @end
 %%--------------------------------------------------------------------
 init_per_suite(Config) ->
+    {ok, Cwd} = file:get_cwd(),
+    Path = string:tokens(Cwd, "/"),
+    NewCwd = fun(P) -> [_,_|Rest] = lists:reverse(P),
+		       "/" ++ filename:join(lists:reverse(Rest))
+	     end,
+    ok = file:set_cwd(NewCwd(Path)),
     application:start(erldb),
+    ok = file:set_cwd(Cwd),
     Config.
 
 %%--------------------------------------------------------------------
