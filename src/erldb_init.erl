@@ -13,6 +13,6 @@ ensure_tables([H|T]) ->
     BackendValues = proplists:get_value(Backend, Env),
     TableOptions = proplists:get_value(default_table_options, BackendValues),
     Worker = poolboy:checkout(Backend),
-    gen_server:call(Worker, {init_table, Model, TableOptions}),
+    {ok, Model} = gen_server:call(Worker, {init_table, Model, [{module_attr, Attr} | TableOptions]}),
     poolboy:checkin(Backend, Worker),
     ensure_tables(T).

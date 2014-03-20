@@ -9,7 +9,7 @@
                  ]},
   {mod, { erldb_app, []}},
   {env, [{model_path, "examples/"},
-         {db_pools, [{ets, [{worker, erldb_ets},
-			    {poolboy_config, [{size, 10}, {max_overflow, 20}]},
-			    {default_table_options, [named_table, public, ordered_set]}]}]}]}
+         {db_pools, [{mnesia, [{worker, erldb_mnesia},
+			       {poolboy_config, [{size, 10}, {max_overflow, 20}]},
+			       {default_table_options, []}]}]}]}
 ]}.

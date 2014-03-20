@@ -71,9 +71,8 @@ init(_Args) ->
 %% @end
 %%--------------------------------------------------------------------
 handle_call({init_table, Name, Args}, _From, State) ->
-    Options = proplists:get_value(options, Args, []),
-    Result = ets:new(Name, Options),
-    {reply, Result, State};
+    Result = ets:new(Name, Args),
+    {reply, {ok, Result}, State};
 
 handle_call({save, Object}, _From, State) ->
     Model = element(1, Object),
@@ -95,7 +94,7 @@ handle_call({find, Model, Conditions, _Options}, _From, State) ->
             Fields = proplists:get_value(fields, Model:module_info(attributes)),
             Match = build_match_q(Conditions, Fields),
             Object = ets:match_object(Model, Match),
-            {reply, Object, State}
+            {reply, {ok, Object}, State}
     end;
 
 handle_call({delete, Model, Conditions}, _From, State) ->

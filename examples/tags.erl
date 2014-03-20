@@ -1,4 +1,4 @@
--backend(ets, []).
+-backend(mnesia, []).
 
 -field(id, string, [primary_key]).
 -field(title, string, [{default, "Fancy title"}]).
