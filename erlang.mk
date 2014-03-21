@@ -117,7 +117,7 @@ app: ebin/$(PROJECT).app
 		> ebin/$(PROJECT).app
 
 model:
-	./priv/compilemodel
+	./priv/compilemodel $(PROJECT)
 
 define compile_erl
 	$(erlc_verbose) erlc -v $(ERLC_OPTS) -o ebin/ \
