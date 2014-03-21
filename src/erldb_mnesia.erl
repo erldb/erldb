@@ -25,13 +25,6 @@
 %%% API
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Starts the server
-%%
-%% @spec start_link() -> {ok, Pid} | ignore | {error, Error}
-%% @end
-%%--------------------------------------------------------------------
 start_link(Args) ->
     WorkerArgs = proplists:get_value(worker_args, Args, []),
     gen_server:start_link(?MODULE, WorkerArgs, []).
@@ -41,20 +34,8 @@ start_link(Args) ->
 %%%===================================================================
 
 init(_Args) ->
-    ensure_start(),
+    ok = ensure_start(),
     {ok, #state{}}.
-
-ensure_start() ->
-    mnesia:create_schema([node()]),
-    application:start(mnesia).
-
-
-get_fieldname([], Acc) ->
-    lists:reverse(Acc);
-get_fieldname([{field, X} | Tail], Acc) ->
-    get_fieldname(Tail, [element(1, hd(X)) | Acc]);
-get_fieldname([{_,_}|Tail], Acc) ->
-    get_fieldname(Tail, Acc).
 
 handle_call({init_table, Name, Args}, _From, State) ->
     FieldName = get_fieldname(proplists:get_value(module_attr, Args), []),
@@ -96,74 +77,45 @@ handle_call({supported_condition, Conditions}, _From, State) ->
 handle_cast(_, State) ->
     {noreply, State}.
 
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Handling all non call/cast messages
-%%
-%% @spec handle_info(Info, State) -> {noreply, State} |
-%%                                   {noreply, State, Timeout} |
-%%                                   {stop, Reason, State}
-%% @end
-%%--------------------------------------------------------------------
 handle_info(_Info, State) ->
     {noreply, State}.
 
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% This function is called by a gen_server when it is about to
-%% terminate. It should be the opposite of Module:init/1 and do any
-%% necessary cleaning up. When it returns, the gen_server terminates
-%% with Reason. The return value is ignored.
-%%
-%% @spec terminate(Reason, State) -> void()
-%% @end
-%%--------------------------------------------------------------------
 terminate(_Reason, _State) ->
     ok.
 
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Convert process state when code is changed
-%%
-%% @spec code_change(OldVsn, State, Extra) -> {ok, NewState}
-%% @end
-%%--------------------------------------------------------------------
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-transaction(read, Tab, Key) ->
-    Transaction =
-        mnesia:transaction(
-          fun() ->
-                  mnesia:read(Tab, Key)
-          end),
-    case Transaction of
-        {atomic, Response} -> {ok, Response};
-        {aborted, Reason} -> {error, Reason}
-    end;
-transaction(write, Tab, Object) ->
-    Transaction =
-        mnesia:transaction(
-          fun() ->
-                  ok = mnesia:write(Tab, Object, write)
-          end),
-    case Transaction of
-        {atomic, Response} -> {ok, Response};
-        {aborted, Reason} -> {error, Reason}
-    end;
-transaction(delete, Tab, Key) ->
-    Transaction =
-        mnesia:transaction(
-          fun() ->
-                  mnesia:delete(Tab, Key, write)
-          end),
-    case Transaction of
-        {atomic, Response} -> {ok, Response};
+-spec ensure_start() -> ok | {error, Reaon :: term()}.
+ensure_start() ->
+    mnesia:create_schema([node()]),
+    case application:start(mnesia) of
+	{ok, mnesia} ->
+	    ok;
+	{error, {already_started, mnesia}} ->
+	    ok;
+	Err ->
+	    Err
+    end.
+
+-spec get_fieldname(list(tuple()), Acc :: list()) -> list().
+get_fieldname([], Acc) ->
+    lists:reverse(Acc);
+get_fieldname([{field, X} | Tail], Acc) ->
+    get_fieldname(Tail, [element(1, hd(X)) | Acc]);
+get_fieldname([{_,_}|Tail], Acc) ->
+    get_fieldname(Tail, Acc).
+
+transaction(Action, Tab, Object) ->
+    Fun = case Action of
+	      read -> fun() -> mnesia:read(Tab, Object) end;
+	      write -> fun() -> mnesia:write(Tab, Object, write) end;
+	      delete -> fun() -> mnesia:delete(Tab, Object, write) end
+	  end,
+    case mnesia:transaction(Fun) of
+	{atomic, Response} -> {ok, Response};
         {aborted, Reason} -> {error, Reason}
     end.
