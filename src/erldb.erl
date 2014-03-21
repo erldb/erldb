@@ -47,9 +47,9 @@ find(Model, Conditions, Options) ->
     Worker = poolboy:checkout(Poolname),
     Result =
         case gen_server:call(Worker, {supported_condition, Conditions}) of
-            ok ->
+            {ok, supported} ->
                 gen_server:call(Worker, {find, Model, Conditions, Options});
-            {not_supported, Operator} ->
+            {error, not_supported, Operator} ->
                 erldb_log:msg(error, "'~p' does not support query operator '~p'", [Model, Operator]),
                 {error, op_not_supported}
         end,
@@ -94,7 +94,7 @@ delete(Object) when is_tuple(Object) ->
     Proceed = pre_delete(Module, Object),
     case Proceed of
         ok ->
-            _List = from_all_backends(Module, Object),
+            _List = from_all_backends(delete, Module, Object),
             ok;
         _ ->
             ok
@@ -109,11 +109,7 @@ delete(Object) when is_tuple(Object) ->
 save(Object) when is_tuple(Object) ->
     Module = element(1, Object),
     %% Determine if this is an insert or an update
-    [PrimaryKey] =
-        lists:filter(
-          fun({field, [{_, _, _, Arglist}]}) -> proplists:get_value(primary_key, Arglist, false); (_) -> false end,
-          Module:module_info(attributes)),
-    PrimaryKeyPos = element(2, PrimaryKey),
+    PrimaryKeyPos = primary_key_pos(Module:module_info(attributes), 1),
     case element(PrimaryKeyPos, Object) of
         'id' ->
             %% This is an insertion
@@ -128,6 +124,18 @@ save(Object) when is_tuple(Object) ->
         _ ->
             update(Object)
     end.
+
+primary_key_pos([], N) ->
+    N;
+primary_key_pos([{field, _, _, Arglist}|T], N) ->
+    case lists:member(primary_key, Arglist) of
+	true ->
+	    primary_key_pos([], N+1);
+	false ->
+	    primary_key_pos([T], N+1)
+    end;
+primary_key_pos([_|T],N) ->
+    primary_key_pos(T, N).
 
 %%--------------------------------------------------------------------
 %% @doc Performs an update operation for an object
@@ -153,7 +161,7 @@ update(Object) when is_tuple(Object) ->
     UpdateRes =
         case Proceed of
             ok ->
-                Res = from_all_backends(Module, Object),
+                Res = from_all_backends(update, Module, Object),
                 lists:any(fun({ok, _}) -> true; (_) -> false end, Res);
             stop ->
                 []
@@ -197,11 +205,11 @@ insert(Object) when is_tuple(Object) ->
             {ok, NewObject}
     end.
 
-from_all_backends(Module, Object) ->
+from_all_backends(Action, Module, Object) ->
     _List = lists:map(
               fun({Poolname, Arguments}) ->
                       Worker = poolboy:checkout(Poolname),
-                      Res = gen_server:call(Worker, {delete, Object, Arguments}),
+                      Res = gen_server:call(Worker, {Action, Object, Arguments}),
                       poolboy:checkin(Poolname, Worker),
                       Res
-              end, proplists:get_value(backend, Module:module_info(attributes, []))).
+              end, proplists:get_value(backend, Module:module_info(attributes))).

@@ -117,7 +117,7 @@ app: ebin/$(PROJECT).app
 		> ebin/$(PROJECT).app
 
 model:
-	./priv/compilemodel
+	./priv/compilemodel $(PROJECT)
 
 define compile_erl
 	$(erlc_verbose) erlc -v $(ERLC_OPTS) -o ebin/ \
@@ -243,7 +243,7 @@ endef
 $(foreach test,$(CT_SUITES),$(eval $(call test_target,$(test))))
 
 tests: ERLC_OPTS += -DTEST=1 +'{parse_transform, eunit_autoexport}'
-tests: clean deps app build-tests
+tests: clean deps app model build-tests
 	@if [ -d "test" ] ; \
 	then \
 		mkdir -p logs/ ; \

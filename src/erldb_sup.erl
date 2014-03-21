@@ -25,9 +25,11 @@ start_link() ->
 init([]) ->
     %% Gets the environment-variable for db_pools
     Pools = erldb_env:get_env(erldb, db_pools, []),
-
     %% Start the workers
-    PoolSpecs = lists:map(fun({Name, Type, SizeArgs, WorkerArgs}) ->
+    PoolSpecs = lists:map(fun({Name, Args}) ->
+				  Type = proplists:get_value(worker, Args),
+				  SizeArgs = proplists:get_value(poolboy_config, Args),
+				  WorkerArgs = proplists:get_value(default_table_options, Args),
                                   PoolArgs = [{name, {local, Name}},
                                               {worker_module, Type},
                                               {worker_args, [{db_name, Name}, {db_type, Type}|WorkerArgs]}
