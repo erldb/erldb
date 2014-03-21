@@ -25,6 +25,7 @@
           fields = [],
           attributes = [],
           body = [],
+          foreign_keys = [],
           fc = 2 %% Field counter. Starts on 2 since 1 contains the record-name
          }).
 
@@ -76,11 +77,20 @@ do_compile(Filename, CompilerState = #compiler_state{includedir = IncludeDir,
 %%--------------------------------------------------------------------
 -spec post_parse(tuple(), #model_state{}) -> #model_state{}.
 post_parse({attribute, R0, field, {Name, Type, Arguments}}, State = #model_state{
-                                                                   attributes = Attributes,
-                                                                   fields = Fields,
-                                                                   fc = FC}) ->
+                                                              attributes = Attributes,
+                                                              fields = Fields,
+                                                              fc = FC,
+                                                              foreign_keys = FK}) ->
     A = {attribute, R0, field, {Name, FC, Type, Arguments}},
-    State#model_state{fields = [{Name, Type, Arguments}|Fields], attributes = [A|Attributes], fc = FC+1};
+    ForeignKeys =
+        case Type of
+            foreign_key ->
+                [{Name, FC, Arguments}|FK];
+            _ ->
+                FK
+        end,
+    A = {attribute, R0, field, {Name, FC, Type, Arguments}},
+    State#model_state{fields = [{Name, Type, Arguments}|Fields], attributes = [A|Attributes], fc = FC+1, foreign_keys = ForeignKeys};
 post_parse(A = {attribute, _R0, backend, {NamedBackend, Arguments}}, State = #model_state{
                                                                        attributes = Attributes,
                                                                        backends = Backends}) ->
