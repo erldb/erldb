@@ -4,16 +4,20 @@
 main(Args) ->
     App = list_to_atom(hd(Args)),
     application:load(App),
-    {ok, Path} = application:get_env(App, model_path),
-    io:format("model_path: ~p~n", [Path]),
-    erldb_log:msg("Start compiling", ""),
-    case filelib:is_dir("./include") of
-	true -> ok;
-	false -> file:make_dir("./include")
-    end,
-    {ok, Filenames} = file:list_dir(Path),
-    compile_models(Filenames, Path),
-    erldb_log:msg("Done compiling", "").
+    case application:get_env(App, model_path) of
+	{ok, Path} ->
+	    io:format("model_path: ~p~n", [Path]),
+	    erldb_log:msg("Start compiling", ""),
+	    case filelib:is_dir("./include") of
+		true -> ok;
+		false -> file:make_dir("./include")
+	    end,
+	    {ok, Filenames} = file:list_dir(Path),
+	    compile_models(Filenames, Path),
+	    erldb_log:msg("Done compiling", "");
+	undefined ->
+	    ok
+    end.	    
 
 compile_models([], _) ->
     ok;
