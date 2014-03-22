@@ -8,8 +8,7 @@
                   stdlib
                  ]},
   {mod, { erldb_app, []}},
-  {env, [{model_path, "examples/"},
-         {db_pools, [{mnesia, [{worker, erldb_mnesia},
+  {env, [{db_pools, [{mnesia, [{worker, erldb_mnesia},
 			       {poolboy_config, [{size, 10}, {max_overflow, 20}]},
 			       {default_table_options, []}]}]}]}
 ]}.
