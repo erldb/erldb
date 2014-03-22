@@ -10,9 +10,15 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
-    {ok, Path} = application:get_env(erldb, model_path),
-    {ok, Models} = file:list_dir_all(Path),
     Return = erldb_sup:start_link(),
+    Models =
+	case application:get_env(model_path) of
+	    {ok, Path} -> 
+		{ok, ModelsList} = file:list_dir_all(Path),
+		ModelsList;
+	    undefined ->
+		[]
+	end,    
     erldb_init:ensure_tables(Models),
     Return.
 
