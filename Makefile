@@ -4,6 +4,7 @@ PROJECT = erldb
 
 # Options
 
+CT_SUITES = erldb_mnesia
 PLT_APPS = kernel stdlib asn1 crypto public_key ssl
 
 # Dependencies
