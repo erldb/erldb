@@ -105,7 +105,7 @@ handle_call({delete, Model, Conditions}, _From, State) ->
       fun(Object) ->
               true = ets:delete_object(Model, Object)
       end, ObjectList),
-    erldb_log:msg(info, "Removed ~p objects of type ~p", [length(ObjectList), Model]),
+    lager:info("Removed ~p objects of type ~p", [length(ObjectList), Model]),
     {reply, ok, State};
 
 handle_call({supported_condition, Conditions}, _From, State) ->

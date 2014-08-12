@@ -50,7 +50,7 @@ find(Model, Conditions, Options) ->
             {ok, supported} ->
                 gen_server:call(Worker, {find, Model, Conditions, Options});
             {error, not_supported, Operator} ->
-                erldb_log:msg(error, "'~p' does not support query operator '~p'", [Model, Operator]),
+                lager:error("'~p' does not support query operator '~p'", [Model, Operator]),
                 {error, op_not_supported}
         end,
     poolboy:checkin(Poolname, Worker),
