@@ -95,7 +95,8 @@ post_parse({attribute, _R0, relation, {belongs_to, Model}}, State = #model_state
     PrimaryKey =
         case code:is_loaded(Model) of
             false ->
-                %% Here's when it gets tricky :-)
+                %% Here's when it gets tricky, should we try and compile the model or just simply fail?
+                %% If we compile we might get into a infinite loop if circular dependencies exists
                 ok;
             _ ->
                 ok
