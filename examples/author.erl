@@ -8,3 +8,4 @@
 
 -field(id, integer, [primary_key, auto_increment]).
 -field(name, string, [{default, "John Doe"}]).
+-field(callsign, string).
