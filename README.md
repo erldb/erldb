@@ -10,11 +10,15 @@ Check the ``examples/``-directory for example models. To compile the model tags.
    APP    poolboy.app.src
    APP    erldb.app.src
   ./priv/compilemodel
-  model_path: "examples/"
-  ################## "Start compiling" ###################
-  file "tags.erl"
-  ################## "Done compiling" ###################
+  model_path: "./models"
+  Start compiling
+  "author.erl"... {ok,"author.beam"}
+  "tags.erl"... {ok,"tags.beam"}
+  Done compiling
+```
 
+Now you can read the record definitions for each of the models within erlang:
+```
   $ erl -pa ebin/
   Erlang R16B01 (erts-5.10.2) [source-bdf5300] [64-bit] [smp:4:4] [async-threads:10] [hipe] [kernel-poll:false]
 
@@ -31,8 +35,7 @@ Check the ``examples/``-directory for example models. To compile the model tags.
 
 # Get workers
 
-You can list all erldb packages with ```make pkg-list```. You can also search packages via ```make pkg-search q=STRING```.
-To install a worker type ```make pkg-install q=PACKAGE```.
+TBA
 
 # Build
 To build erldb use Makefile to build.
@@ -73,3 +76,4 @@ To generate documentation of erldb:
 ```
   $ make tests
 ```
+NOTE: The tests does not work 100% yet.
