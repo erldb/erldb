@@ -191,6 +191,11 @@ generate_hrl_fields([{Name, Type, Args}|Tl]) ->
             Res ++ ",\n" ++ generate_hrl_fields(Tl)
     end.
 
+%%--------------------------------------------------------------------
+%% @doc Generates the resulting beam-file in the file system
+%% @spec generate_beam(tuple()) -> {ok, Beamfile :: binary()} | ok.
+%% @end
+%%--------------------------------------------------------------------
 generate_beam(#compiler_state{outdir = OutDir,
                               model_state = #model_state{
                                 name = Name,

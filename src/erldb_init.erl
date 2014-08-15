@@ -3,6 +3,11 @@
 -export([ensure_tables/1]).
 
 
+%%--------------------------------------------------------------------
+%% @doc Ensures that all models have tables
+%% @spec ensure_tables([Modelname :: string()]) -> ok.
+%% @end
+%%--------------------------------------------------------------------
 ensure_tables([]) ->
     ok;
 ensure_tables([H|T]) ->
