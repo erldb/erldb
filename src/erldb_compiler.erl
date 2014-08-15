@@ -76,6 +76,8 @@ do_compile(Filename, CompilerState = #compiler_state{includedir = IncludeDir,
 %% @end
 %%--------------------------------------------------------------------
 -spec post_parse(tuple(), #model_state{}) -> #model_state{}.
+post_parse({attribute, R0, field, {Name, Type}}, State) ->
+    post_parse({attribute, R0, field, {Name, Type, []}}, State);
 post_parse({attribute, R0, field, {Name, Type, Arguments}}, State = #model_state{
                                                               attributes = Attributes,
                                                               fields = Fields,
