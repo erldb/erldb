@@ -59,7 +59,7 @@ To generate documentation of erldb:
 
 ### Run dialyzer
 ```
-  $ make dialyzer
+  $ make dialyze
 ```
 
 ## Build and run tests
