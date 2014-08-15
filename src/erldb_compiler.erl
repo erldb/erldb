@@ -25,7 +25,7 @@
           fields = [],
           attributes = [],
           body = [],
-          foreign_keys = [],
+          relations = [],
           fc = 2 %% Field counter. Starts on 2 since 1 contains the record-name
          }).
 
@@ -79,22 +79,30 @@ do_compile(Filename, CompilerState = #compiler_state{includedir = IncludeDir,
 post_parse({attribute, R0, field, {Name, Type, Arguments}}, State = #model_state{
                                                               attributes = Attributes,
                                                               fields = Fields,
-                                                              fc = FC,
-                                                              foreign_keys = FK}) ->
+                                                              fc = FC}) ->
     A = {attribute, R0, field, {Name, FC, Type, Arguments}},
-    ForeignKeys =
-        case Type of
-            foreign_key ->
-                [{Name, FC, Arguments}|FK];
-            _ ->
-                FK
-        end,
-    A = {attribute, R0, field, {Name, FC, Type, Arguments}},
-    State#model_state{fields = [{Name, Type, Arguments}|Fields], attributes = [A|Attributes], fc = FC+1, foreign_keys = ForeignKeys};
+    State#model_state{fields = [{Name, Type, Arguments}|Fields], attributes = [A|Attributes], fc = FC+1};
 post_parse(A = {attribute, _R0, backend, {NamedBackend, Arguments}}, State = #model_state{
                                                                        attributes = Attributes,
                                                                        backends = Backends}) ->
     State#model_state{backends = [{NamedBackend, Arguments}|Backends], attributes = [A|Attributes]};
+post_parse({attribute, _R0, relation, {belongs_to, Model}}, State = #model_state{
+                                                              relations = Relations}) ->
+    %% We need to define a new attribute which contains the primary key of the other model.
+    %% This is a bit tricky since we need to check which field is the primary one.
+    PrimaryKey =
+        case code:is_loaded(Model) of
+            false ->
+                %% Here's when it gets tricky :-)
+                ok;
+            _ ->
+                ok
+        end,
+    State#model_state{relations = [{belongs_to, Model, PrimaryKey}|Relations]};
+post_parse({attribute, _R0, relation, {has, Amount, Model}}, State = #model_state{
+                                                               relations = Relations}) ->
+    %% This model is linked to 'Amount' numbers of rows within another model
+    State#model_state{relations = [{has, Amount, Model}|Relations]};
 post_parse(Element, State = #model_state{body = Body}) ->
     State#model_state{body = [Element|Body]}.
 
