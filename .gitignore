@@ -5,6 +5,7 @@ src/erl_db_lex.erl
 src/erl_db_parser.erl
 *~
 log/
+logs/
 *.dump
 *.plt
 *.beam
