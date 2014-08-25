@@ -120,7 +120,7 @@ post_parse({attribute, _R0, relation, {has, Amount, Model}}, State = #model_stat
                                                                relations = Relations}) ->
     %% This model is linked to 'Amount' numbers of rows within another model
     %% TODO: check which field is the primary_key
-    State#model_state{relations = [{has, Amount, Model, field}|Relations]};
+    State#model_state{relations = [{has, Amount, Model}|Relations]};
 post_parse(Element, State = #model_state{body = Body}) ->
     State#model_state{body = [Element|Body]}.
 
@@ -222,14 +222,15 @@ generate_hrl_fields([{Name, Type, Args}|Tl]) ->
 %% @doc Builds relation get-functions
 %% @end
 %%--------------------------------------------------------------------
--spec build_relation_functions([tuple()]) -> [tuple()].
-build_relation_functions([]) ->
+-spec build_relation_functions(CurrentModel :: atom(), [tuple()]) -> [tuple()].
+build_relation_functions(_, []) ->
     [];
-build_relation_functions([{has, Amount, Model, TargetField}|Tl]) ->
+build_relation_functions(CurrentModel, [{has, Amount, Model}|Tl]) ->
     FuncName = case Amount of
                    1 -> Model;
                    _ -> inflector:pluralize(erlang:atom_to_list(Model))
                end,
+
     [erl_syntax:function(
       erl_syntax:atom(FuncName),
       [erl_syntax:clause(
@@ -237,15 +238,22 @@ build_relation_functions([{has, Amount, Model, TargetField}|Tl]) ->
                                                   erl_syntax:atom(erldb),
                                                   erl_syntax:atom(find),
                                                   [ erl_syntax:atom(Model),
-                                                    erl_syntax:atom(TargetField) ])])])|build_relation_functions(Tl)];
-build_relation_functions([_|Tl]) ->
-    build_relation_functions(Tl).
+                                                    erl_syntax:list([
+                                                                     erl_syntax:tuple([
+                                                                                       erl_syntax:atom(lists:concat([CurrentModel, "_id"])),
+                                                                                       erl_syntax:record_access(erl_syntax:variable("Model"),
+                                                                                                                erl_syntax:atom(CurrentModel),
+                                                                                                                erl_syntax:atom("id"))
+                                                                                      ])])
+                                                    ])])])|build_relation_functions(CurrentModel, Tl)];
+build_relation_functions(CurrentModel, [_|Tl]) ->
+    build_relation_functions(CurrentModel, Tl).
 
 %%--------------------------------------------------------------------
 %% @doc Generates the resulting beam-file in the file system
 %% @end
 %%--------------------------------------------------------------------
--spec generate_beam(#compiler_state{}) -> {ok, Beamfile :: binary()} | ok.
+-spec generate_beam(#compiler_state{}, RecordDefinition :: [tuple()]) -> {ok, Beamfile :: binary()} | ok.
 generate_beam(#compiler_state{outdir = OutDir,
                               model_state = #model_state{
                                 name = Name,
@@ -255,7 +263,7 @@ generate_beam(#compiler_state{outdir = OutDir,
                                 body = Body}},
               RecordDefinition) ->
 
-    RelationFunctions = build_relation_functions(Relations),
+    RelationFunctions = build_relation_functions(Name, Relations),
     Functions = rebuild_functions(Body, Name, Fields),
     %% Give the module a name
     AST =
