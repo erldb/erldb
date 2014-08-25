@@ -11,6 +11,9 @@
          start/1,
          stop/0,
          find/2,
+         find/3,
+         find_one/2,
+         find_one/3,
          delete/1,
          save/1
         ]).
@@ -52,6 +55,35 @@ find(Model, Conditions, Options) ->
             {error, not_supported, Operator} ->
                 lager:error("'~p' does not support query operator '~p'", [Model, Operator]),
                 {error, op_not_supported}
+        end,
+    poolboy:checkin(Poolname, Worker),
+    Result.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Finds one
+%% @end
+%%--------------------------------------------------------------------
+-spec find_one(atom(), [tuple()]) -> tuple() | not_found.
+find_one(Model, Conditions) ->
+    find_one(Model, Conditions, []).
+
+-spec find_one(atom(), [tuple()], [tuple()]) -> tuple() | not_found.
+find_one(Model, Conditions, Options) ->
+    Attributes = Model:module_info(attributes),
+    [{Poolname, _Args}|_] = proplists:get_value(backend, Attributes, []),
+    Worker = poolboy:checkout(Poolname),
+    Result =
+        case gen_server:call(Worker, {supported_operation, find_one}) of
+            {error, op_not_supported} ->
+                case find(Model, Conditions, Options) of
+                    {ok, [E|_]} ->
+                        E;
+                    _ ->
+                        not_found
+                end;
+            {ok, supported} ->
+                gen_server:call(Worker, {find_one, Model, Conditions, Options})
         end,
     poolboy:checkin(Poolname, Worker),
     Result.
@@ -138,9 +170,13 @@ primary_key_pos([_|T],N) ->
     primary_key_pos(T, N).
 
 %%--------------------------------------------------------------------
-%% @doc Performs an update operation for an object
+%% @doc Performs a pre-update hook for an object
+%% Pre-update is called, if exists, right before the update is sent to the
+%% underlying adapter. If the hook returns the atom 'stop' the whole operation
+%% is aborted and the object will not be updated.
 %% @end
 %%--------------------------------------------------------------------
+-spec pre_update(Module :: atom(), Object :: tuple()) -> {ok, Object :: tuple()} | {stop, undefined}.
 pre_update(Module, Object) ->
     case erlang:function_exported(Module, '_pre_update', 1) of
         true ->
@@ -154,6 +190,12 @@ pre_update(Module, Object) ->
             {ok, Object}
     end.
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
 -spec update(tuple()) -> {ok, tuple()} | {stopped, tuple()} | {error, atom()}.
 update(Object) when is_tuple(Object) ->
     Module = element(1, Object),
