@@ -29,6 +29,7 @@
           model_state :: #model_state{}
          }).
 
+-define(INDENT_WHITESPACE, "    ").
 
 
 %%--------------------------------------------------------------------
@@ -191,24 +192,24 @@ rebuild_function(Other, _) ->
 generate_hrl(Modelname, Fields) ->
     lists:concat(["-record(",
                   Modelname,
-                  ", {",
+                  ", {\n",
                   generate_hrl_fields(Fields),
                   "})."]).
 
--spec generate_hrl_fields([{atom(), atom(), [tuple()]}] -> string().
+-spec generate_hrl_fields([{atom(), atom(), [tuple()]}]) -> string().
 generate_hrl_fields([]) -> [];
 generate_hrl_fields([{Name, Type, Args}|Tl]) ->
     Res =
         case proplists:get_value(default, Args) of
             undefined ->
-                case Type of
-                    primary_key ->
-                        lists:concat([Name, " = id :: any()"]);
+                case proplists:get_value(primary_key, Args) of
+                    undefined ->
+                        lists:concat([?INDENT_WHITESPACE, Name, " ::  undefined | ", convert_to_erl_type(Type)]);
                     _ ->
-                        lists:concat([Name, " :: ", undefined, " | ", convert_to_erl_type(Type)])
+                        lists:concat([?INDENT_WHITESPACE, Name, " = id :: id | ", convert_to_erl_type(Type)])
                 end;
             DefaultValue ->
-                lists:concat([Name, " = \"", DefaultValue, "\" :: ", convert_to_erl_type(Type)])
+                lists:concat([?INDENT_WHITESPACE, Name, " = \"", DefaultValue, "\" :: ", convert_to_erl_type(Type)])
         end,
     case length(Tl) of
         0 ->
