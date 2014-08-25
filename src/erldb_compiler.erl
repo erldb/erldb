@@ -62,10 +62,11 @@ do_compile(Filename, CompilerState = #compiler_state{includedir = IncludeDir,
             ModelState2 = lists:foldl(fun(X, State) -> post_parse(X, State) end,
                                       CompilerState#compiler_state.model_state, ParsedForms),
             Hrl = generate_hrl(list_to_atom(Modelname), ModelState2#model_state.fields),
+            TypeDefinition = lists:concat(["\n-type ", Modelname, "_model() :: #", Modelname, "{}."]),
             {ok, GenHrl} = erl_parse:parse(element(2, erl_scan:string(Hrl))),
 
             %% Save the HRL-file
-            ok = file:write_file(filename:join([IncludeDir, Modelname++".hrl"]), Hrl),
+            ok = file:write_file(filename:join([IncludeDir, Modelname++".hrl"]), Hrl ++ TypeDefinition),
             generate_beam(CompilerState#compiler_state{model_state = ModelState2}, GenHrl);
         Error ->
             Error
