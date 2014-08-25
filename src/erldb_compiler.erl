@@ -114,7 +114,8 @@ post_parse({attribute, R0, relation, {belongs_to, Model}}, State = #model_state{
 post_parse({attribute, _R0, relation, {has, Amount, Model}}, State = #model_state{
                                                                relations = Relations}) ->
     %% This model is linked to 'Amount' numbers of rows within another model
-    State#model_state{relations = [{has, Amount, Model}|Relations]};
+    %% TODO: check which field is the primary_key
+    State#model_state{relations = [{has, Amount, Model, field}|Relations]};
 post_parse(Element, State = #model_state{body = Body}) ->
     State#model_state{body = [Element|Body]}.
 
@@ -211,20 +212,28 @@ generate_hrl_fields([{Name, Type, Args}|Tl]) ->
             Res ++ ",\n" ++ generate_hrl_fields(Tl)
     end.
 
-%% Build the relation related functions
+%%--------------------------------------------------------------------
+%% @doc Builds relation get-functions
+%% @spec build_relation_functions([tuple()]) -> [tuple()].
+%% @end
+%%--------------------------------------------------------------------
+build_relation_functions([]) ->
+    [];
 build_relation_functions([{has, Amount, Model, TargetField}|Tl]) ->
     FuncName = case Amount of
                    1 -> Model;
                    _ -> inflector:pluralize(erlang:atom_to_list(Model))
                end,
-    erl_syntax:function(
+    [erl_syntax:function(
       erl_syntax:atom(FuncName),
       [erl_syntax:clause(
          [erl_syntax:variable("Model")], none, [erl_syntax:application(
                                                   erl_syntax:atom(erldb),
                                                   erl_syntax:atom(find),
                                                   [ erl_syntax:atom(Model),
-                                                    erl_syntax:atom(TargetField)
+                                                    erl_syntax:atom(TargetField) ])])])|build_relation_functions(Tl)];
+build_relation_functions([_|Tl]) ->
+    build_relation_functions(Tl).
 
 %%--------------------------------------------------------------------
 %% @doc Generates the resulting beam-file in the file system
@@ -272,7 +281,7 @@ generate_beam(#compiler_state{outdir = OutDir,
                                                        erl_syntax:atom(delete),
                                                        [ erl_syntax:variable("Model") ])])])
 
-        ] ++ Functions,
+        ] ++ Functions ++ RelationFunctions,
     Forms = [ erl_syntax:revert(Form) || Form <- AST ],
     case compile:forms(Forms, [report_errors]) of
         {ok, ModuleName, Binary} ->
