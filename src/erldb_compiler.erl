@@ -13,21 +13,23 @@
          compile/2
         ]).
 
--record(compiler_state, {
-          outdir = "",
-          includedir = "",
-          model_state
+-record(model_state, {
+          name = "" :: string(),
+          backends = [] :: [tuple()],
+          fields = [] :: [tuple()],
+          attributes = [] :: [tuple()],
+          body = [] :: [tuple()],
+          relations = [] :: [tuple()],
+          fc = 2 :: integer() %% Field counter. Starts on 2 since 1 contains the record-name
          }).
 
--record(model_state, {
-          name = "",
-          backends = [],
-          fields = [],
-          attributes = [],
-          body = [],
-          relations = [],
-          fc = 2 %% Field counter. Starts on 2 since 1 contains the record-name
+-record(compiler_state, {
+          outdir = "" :: string(),
+          includedir = "" :: string(),
+          model_state :: #model_state{}
          }).
+
+
 
 %%--------------------------------------------------------------------
 %% @doc Compiles a file
@@ -44,6 +46,7 @@ compile(Filename) when is_list(Filename) ->
 %%          {includedir, Path}
 %% @end
 %%--------------------------------------------------------------------
+-spec compile(Filename :: string(), Options :: [tuple()]) -> {ok, Beamfile :: binary()} | ok | {error, Error :: atom()}.
 compile(Filename, Options) ->
     %% Extract the filename
     Modelname = filename:rootname(filename:basename(Filename)),
@@ -192,6 +195,7 @@ generate_hrl(Modelname, Fields) ->
                   generate_hrl_fields(Fields),
                   "})."]).
 
+-spec generate_hrl_fields([{atom(), atom(), [tuple()]}] -> string().
 generate_hrl_fields([]) -> [];
 generate_hrl_fields([{Name, Type, Args}|Tl]) ->
     Res =
@@ -215,9 +219,9 @@ generate_hrl_fields([{Name, Type, Args}|Tl]) ->
 
 %%--------------------------------------------------------------------
 %% @doc Builds relation get-functions
-%% @spec build_relation_functions([tuple()]) -> [tuple()].
 %% @end
 %%--------------------------------------------------------------------
+-spec build_relation_functions([tuple()]) -> [tuple()].
 build_relation_functions([]) ->
     [];
 build_relation_functions([{has, Amount, Model, TargetField}|Tl]) ->
@@ -238,9 +242,9 @@ build_relation_functions([_|Tl]) ->
 
 %%--------------------------------------------------------------------
 %% @doc Generates the resulting beam-file in the file system
-%% @spec generate_beam(tuple()) -> {ok, Beamfile :: binary()} | ok.
 %% @end
 %%--------------------------------------------------------------------
+-spec generate_beam(#compiler_state{}) -> {ok, Beamfile :: binary()} | ok.
 generate_beam(#compiler_state{outdir = OutDir,
                               model_state = #model_state{
                                 name = Name,
