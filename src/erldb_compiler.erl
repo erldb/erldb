@@ -88,8 +88,11 @@ post_parse(A = {attribute, _R0, backend, {NamedBackend, Arguments}}, State = #mo
                                                                        attributes = Attributes,
                                                                        backends = Backends}) ->
     State#model_state{backends = [{NamedBackend, Arguments}|Backends], attributes = [A|Attributes]};
-post_parse({attribute, _R0, relation, {belongs_to, Model}}, State = #model_state{
-                                                              relations = Relations}) ->
+post_parse({attribute, R0, relation, {belongs_to, Model}}, State = #model_state{
+                                                             fields = Fields,
+                                                             fc = FC,
+                                                             attributes = Attributes,
+                                                             relations = Relations}) ->
     %% We need to define a new attribute which contains the primary key of the other model.
     %% This is a bit tricky since we need to check which field is the primary one.
     PrimaryKey =
@@ -99,9 +102,15 @@ post_parse({attribute, _R0, relation, {belongs_to, Model}}, State = #model_state
                 %% If we compile we might get into a infinite loop if circular dependencies exists
                 ok;
             _ ->
+                %% Get the primary key type
                 ok
         end,
-    State#model_state{relations = [{belongs_to, Model, PrimaryKey}|Relations]};
+    Fieldname = erlang:list_to_atom(lists:concat([erlang:atom_to_list(Model), "_id"])),
+    A = {attribute, R0, field, {Fieldname, FC, PrimaryKey, []}},
+    State#model_state{fields = [{Fieldname, PrimaryKey, []}|Fields],
+                      attributes = [A|Attributes],
+                      fc = FC+1,
+                      relations = [{belongs_to, Model}|Relations]};
 post_parse({attribute, _R0, relation, {has, Amount, Model}}, State = #model_state{
                                                                relations = Relations}) ->
     %% This model is linked to 'Amount' numbers of rows within another model
@@ -202,6 +211,21 @@ generate_hrl_fields([{Name, Type, Args}|Tl]) ->
             Res ++ ",\n" ++ generate_hrl_fields(Tl)
     end.
 
+%% Build the relation related functions
+build_relation_functions([{has, Amount, Model, TargetField}|Tl]) ->
+    FuncName = case Amount of
+                   1 -> Model;
+                   _ -> inflector:pluralize(erlang:atom_to_list(Model))
+               end,
+    erl_syntax:function(
+      erl_syntax:atom(FuncName),
+      [erl_syntax:clause(
+         [erl_syntax:variable("Model")], none, [erl_syntax:application(
+                                                  erl_syntax:atom(erldb),
+                                                  erl_syntax:atom(find),
+                                                  [ erl_syntax:atom(Model),
+                                                    erl_syntax:atom(TargetField)
+
 %%--------------------------------------------------------------------
 %% @doc Generates the resulting beam-file in the file system
 %% @spec generate_beam(tuple()) -> {ok, Beamfile :: binary()} | ok.
@@ -212,8 +236,11 @@ generate_beam(#compiler_state{outdir = OutDir,
                                 name = Name,
                                 fields = Fields,
                                 attributes = Attributes,
+                                relations = Relations,
                                 body = Body}},
               RecordDefinition) ->
+
+    RelationFunctions = build_relation_functions(Relations),
     Functions = rebuild_functions(Body, Name, Fields),
     %% Give the module a name
     AST =
