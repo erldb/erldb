@@ -13,6 +13,7 @@ DEPS = poolboy
 dep_poolboy = https://github.com/erldb/poolboy.git master
 
 # Targets
+test: all build-tests tests
 
 include erlang.mk
 
