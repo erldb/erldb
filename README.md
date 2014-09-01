@@ -1,5 +1,7 @@
 # erldb
 
+[![Build Status](https://travis-ci.org/erldb/erldb.svg?branch=master)](https://travis-ci.org/erldb/erldb)
+
 ORM (Object-relational mapping) application implemented in Erlang.
 
 # Configure erldb
@@ -16,6 +18,7 @@ A model is defined by a basic set of attributes.
 
 ## Trigger functions
 
+## Compile the models
 
 # Get workers
 
@@ -39,7 +42,7 @@ To generate documentation of erldb:
 
 # Building the examples
 
-Check the ``examples/``-directory for example models. To compile the model tags.erl;
+Check the ``models/``-directory for example models. To compile the model tags.erl;
 ```
   $ make
    APP    poolboy.app.src
