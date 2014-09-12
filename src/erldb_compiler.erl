@@ -63,8 +63,14 @@ do_compile(Filename, CompilerState = #compiler_state{includedir = IncludeDir,
             {ok, Tokens, _EndLocation} = erl_scan:string(binary_to_list(BinStr)),
             Forms = split_on_dot(pre_parse(Tokens, false), [], []),
             ParsedForms = [ element(2, erl_parse:parse(X)) || X <- Forms ],
+
+            NFields = lists:foldl(
+                        fun({attribute, _, field, _}, Acc) -> 1+Acc;
+                           (_, Acc) -> Acc
+                        end, 2, ParsedForms),
+
             ModelState2 = lists:foldl(fun(X, State) -> post_parse(X, State) end,
-                                      CompilerState#compiler_state.model_state, ParsedForms),
+                                      CompilerState#compiler_state.model_state#model_state{fc = NFields}, ParsedForms),
             Hrl = generate_hrl(list_to_atom(Modelname), ModelState2#model_state.fields),
             TypeDefinition = lists:concat(["\n-type ", Modelname, "_model() :: #", Modelname, "{}."]),
             {ok, GenHrl} = erl_parse:parse(element(2, erl_scan:string(Hrl))),
@@ -88,7 +94,7 @@ post_parse({attribute, R0, field, {Name, Type, Arguments}}, State = #model_state
                                                               fields = Fields,
                                                               fc = FC}) ->
     A = {attribute, R0, field, {Name, FC, Type, Arguments}},
-    State#model_state{fields = [{Name, Type, Arguments}|Fields], attributes = [A|Attributes], fc = FC+1};
+    State#model_state{fields = [{Name, Type, Arguments}|Fields], attributes = [A|Attributes], fc = FC-1};
 post_parse(A = {attribute, _R0, backend, {NamedBackend, Arguments}}, State = #model_state{
                                                                        attributes = Attributes,
                                                                        backends = Backends}) ->
@@ -114,7 +120,7 @@ post_parse({attribute, R0, relation, {belongs_to, Model}}, State = #model_state{
     A = {attribute, R0, field, {Fieldname, FC, PrimaryKey, []}},
     State#model_state{fields = [{Fieldname, PrimaryKey, []}|Fields],
                       attributes = [A|Attributes],
-                      fc = FC+1,
+                      fc = FC-1,
                       relations = [{belongs_to, Model}|Relations]};
 post_parse({attribute, _R0, relation, {has, Amount, Model}}, State = #model_state{
                                                                relations = Relations}) ->
@@ -262,7 +268,6 @@ generate_beam(#compiler_state{outdir = OutDir,
                                 relations = Relations,
                                 body = Body}},
               RecordDefinition) ->
-
     RelationFunctions = build_relation_functions(Name, Relations),
     Functions = rebuild_functions(Body, Name, Fields),
     %% Give the module a name
