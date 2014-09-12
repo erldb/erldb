@@ -1,10 +1,10 @@
 %%%-------------------------------------------------------------------
-%%% @author Niclas Axelsson <burbas@Niclass-MacBook-Pro-2.local>
+%%% @author Niclas Axelsson <niclas@burbas.se>
 %%% @copyright (C) 2013, Niclas Axelsson
 %%% @doc
 %%%
 %%% @end
-%%% Created : 23 Jul 2013 by Niclas Axelsson <burbas@Niclass-MacBook-Pro-2.local>
+%%% Created : 23 Jul 2013 by Niclas Axelsson <niclas@burbas.se>
 %%%-------------------------------------------------------------------
 -module(erldb_ets).
 
@@ -71,7 +71,8 @@ init(_Args) ->
 %% @end
 %%--------------------------------------------------------------------
 handle_call({init_table, Name, Args}, _From, State) ->
-    Result = ets:new(Name, Args),
+    Options = proplists:get_value(worker_options, Args, []),
+    Result = ets:new(Name, [named_table|Options]),
     {reply, {ok, Result}, State};
 
 handle_call({save, Object}, _From, State) ->
@@ -82,7 +83,7 @@ handle_call({save, Object}, _From, State) ->
             create_table(Model),
             true = ets:insert(Model, Object);
         _Info ->
-            ets:insert(Model, Object)
+            true = ets:insert(Model, Object)
     end,
     {reply, ok, State};
 
@@ -91,7 +92,9 @@ handle_call({find, Model, Conditions, _Options}, _From, State) ->
         undefined ->
             {reply, {error, tab_not_found}, State};
         _Info ->
-            Fields = proplists:get_value(fields, Model:module_info(attributes)),
+            Fields = [ X || X = {Z,_Y} <- Model:module_info(attributes),
+                            Z =:= field ],
+
             Match = build_match_q(Conditions, Fields),
             Object = ets:match_object(Model, Match),
             {reply, {ok, Object}, State}
@@ -204,12 +207,9 @@ replace_list_item(1, Value, [_Out|Fields]) ->
 replace_list_item(Pos, Value, [Field|Fields]) ->
     [Field|replace_list_item(Pos-1, Value, Fields)].
 
-get_field_pos(Fieldname, Fields) ->
-    get_field_pos(Fieldname, Fields, 2).
-
-get_field_pos(_Fieldname, [], _Acc) ->
+get_field_pos(_Fieldname, []) ->
     {error, not_found};
-get_field_pos(_Fieldname, [{_Fieldname, _Type, _Args}|_], Acc) ->
-    Acc;
-get_field_pos(Fieldname, [_|Tl], Acc) ->
-    get_field_pos(Fieldname, Tl, Acc+1).
+get_field_pos(Fieldname, [{Fieldname, Pos, _Type, _Args}|_]) ->
+    Pos;
+get_field_pos(Fieldname, [_|Tl]) ->
+    get_field_pos(Fieldname, Tl).
