@@ -3,7 +3,7 @@
 %%% Example of a tags-model used in erldb
 %%% @end
 %%% Created : 15 Aug 2014 by Niclas Axelsson <niclas@burbas.se>
--backend(mnesia, []).
+-backend(ets, []).
 -relation(belongs_to, author).
 
 -field(id, string, [primary_key]).
@@ -50,6 +50,7 @@ _pre_insert(Object) ->
             {ok, Object}
     end.
 
+%% If the title was equal to "PHP" we abort the insertion.
 _post_insert(Object) ->
     case Object#tags.title of
         "PHP" ->
@@ -62,6 +63,7 @@ _post_insert(Object) ->
 _pre_delete(_Object) ->
     stop.
 
-%% Disable all deletions
+%% Disable all deletions. We don't really need this function since the pre-hook already
+%% disabled deletions.
 _post_delete(Object) ->
     stop.

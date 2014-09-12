@@ -8,7 +8,9 @@
                   stdlib
                  ]},
   {mod, { erldb_app, []}},
-  {env, [{db_pools, [{mnesia, [{worker, erldb_mnesia},
-			       {poolboy_config, [{size, 10}, {max_overflow, 20}]},
-			       {default_table_options, []}]}]}]}
-]}.
+  {env, [{db_pools, [{ets, [{worker, erldb_ets},
+                            {poolboy_config, [{size, 10}, {max_overflow, 20}]},
+                            {worker_options, []}]}]},
+         {default_backend, ets}
+        ]}
+ ]}.

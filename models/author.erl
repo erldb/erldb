@@ -3,7 +3,7 @@
 %%% Example of a author-model used in erldb
 %%% @end
 %%% Created : 15 Aug 2014 by Niclas Axelsson <niclas@burbas.se>
--backend(mnesia, []).
+-backend(ets, []).
 -relation(has, many, tags).
 
 -field(id, integer, [primary_key, auto_increment]).
