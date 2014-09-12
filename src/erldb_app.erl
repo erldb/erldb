@@ -19,7 +19,7 @@ start(_StartType, _StartArgs) ->
             undefined ->
                 []
         end,
-    erldb_init:ensure_tables(Models),
+    bootstrap_models(Models),
     Return.
 
 
