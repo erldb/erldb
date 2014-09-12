@@ -35,7 +35,7 @@ bootstrap_models([]) ->
     ok;
 bootstrap_models([H|T]) ->
     %% We always compile the models we load.
-    {ok, Model, Binary) = erldb_compiler:compile(H),
+    {ok, Model, Binary} = erldb_compiler:compile(H),
     code:load_binary(Model, H, Binary),
     Attr = Model:module_info(attributes),
 
@@ -58,4 +58,4 @@ bootstrap_models([H|T]) ->
 
     {ok, Model} = gen_server:call(Worker, {init_table, Model, [{module_attr, Attr} | TableOptions]}),
     poolboy:checkin(Backend, Worker),
-    ensure_tables(T).
+    bootstrap_models(T).
