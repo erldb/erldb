@@ -35,8 +35,8 @@ bootstrap_models([]) ->
     ok;
 bootstrap_models([H|T]) ->
     %% We always compile the models we load.
-    {ok, Model, Binary} = erldb_compiler:compile(H),
-    code:load_binary(Model, H, Binary),
+    {ok, Model, _Filename} = erldb_compiler:compile(H),
+
     Attr = Model:module_info(attributes),
 
     %% We should be able to handle default backends
