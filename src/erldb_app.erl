@@ -11,15 +11,15 @@
 
 start(_StartType, _StartArgs) ->
     Return = erldb_sup:start_link(),
-    Models =
+    Path =
         case application:get_env(model_path) of
-            {ok, Path} ->
-                {ok, ModelsList} = file:list_dir_all(Path),
-                ModelsList;
+            {ok, P} ->
+                P;
             undefined ->
-                []
+                "./models"
         end,
-    bootstrap_models(Models),
+    {ok, Models} = file:list_dir_all(Path),
+    bootstrap_models(Path, Models),
     Return.
 
 
@@ -31,11 +31,11 @@ stop(_State) ->
 %% Internal functions
 %% ===================================================================
 
-bootstrap_models([]) ->
+bootstrap_models(_Path, []) ->
     ok;
-bootstrap_models([H|T]) ->
+bootstrap_models(Path, [H|T]) ->
     %% We always compile the models we load.
-    {ok, Model, _Filename} = erldb_compiler:compile(H),
+    {ok, Model, _Filename} = erldb_compiler:compile(filename:join(Path, H)),
 
     Attr = Model:module_info(attributes),
 
@@ -53,9 +53,8 @@ bootstrap_models([H|T]) ->
     {ok, Env} = application:get_env(erldb, db_pools),
     BackendValues = proplists:get_value(Backend, Env),
 
-    TableOptions = proplists:get_value(default_table_options, BackendValues),
+    TableOptions = proplists:get_value(worker_options, BackendValues),
     Worker = poolboy:checkout(Backend),
-
-    {ok, Model} = gen_server:call(Worker, {init_table, Model, [{module_attr, Attr} | TableOptions]}),
+    {ok, _Res} = gen_server:call(Worker, {init_table, Model, [{module_attr, Attr}, {worker_options, TableOptions}]}),
     poolboy:checkin(Backend, Worker),
-    bootstrap_models(T).
+    bootstrap_models(Path, T).
