@@ -15,8 +15,17 @@ A model is defined by a basic set of attributes.
 
 
 ## Relations
+There is currently two different relations in erldb;
+
+`-relation(has, AMOUNT, MODEL_NAME).` - Defines a one to AMOUNT relation.
+`-relation(belongs_to, MODEL_NAME).`
 
 ## Trigger functions
+
+
+### Pre triggers
+
+### Post triggers
 
 ## Compile the models
 
@@ -40,7 +49,7 @@ To generate documentation of erldb:
   $ make docs
 ```
 
-# Building the examples
+# Try it out!!
 
 Check the ``models/``-directory for example models. To compile the model tags.erl;
 ```
@@ -57,7 +66,7 @@ Check the ``models/``-directory for example models. To compile the model tags.er
 
 Now you can read the record definitions for each of the models within erlang:
 ```
-  $ erl -pa ebin/
+  $ erl -pa ebin/ deps/*/ebin
   Erlang R16B01 (erts-5.10.2) [source-bdf5300] [64-bit] [smp:4:4] [async-threads:10] [hipe] [kernel-poll:false]
 
   Eshell V5.10.2  (abort with ^G)
@@ -66,7 +75,13 @@ Now you can read the record definitions for each of the models within erlang:
   2> A = #tags{}.
   #tags{id = undefined,title = "Fancy title",text = undefined,
         created = undefined}
-  3> A:uppercase_title().
+  3> B = A:uppercase_title().
   "FANCY TITLE"
-  4>
+  4> B:save()
+  {ok,#tags{author_id = undefined,id = id,
+          title = "FANCY TITLE",text = undefined,created = undefined}}
+  5> erldb:find(tags, []).
+  {ok,[#tags{author_id = undefined,id = id,
+           title = "FANCY TITLE",text = undefined,
+           created = undefined}]}
 ```
