@@ -230,7 +230,7 @@ build_relation_functions(CurrentModel, [{has, Amount, Model}|Tl]) ->
                    1 -> Model;
                    _ -> inflector:pluralize(erlang:atom_to_list(Model))
                end,
-
+    %% Generates function: FuncName(Model) -> erldb:find(Model, [{CurrentModel_id, Model#CurrentModel.id}]).
     [erl_syntax:function(
       erl_syntax:atom(FuncName),
       [erl_syntax:clause(
@@ -302,7 +302,7 @@ generate_beam(#compiler_state{outdir = OutDir,
             _Module = code:load_binary(ModuleName, "", Binary),
             BeamFilename = filename:join([atom_to_list(ModuleName) ++ ".beam"]),
             ok = file:write_file(filename:join([OutDir, BeamFilename]), Binary),
-            {ok, BeamFilename};
+            {ok, ModuleName, BeamFilename};
         _ ->
             ok
     end.
