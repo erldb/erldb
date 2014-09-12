@@ -141,33 +141,31 @@ delete(Object) when is_tuple(Object) ->
 save(Object) when is_tuple(Object) ->
     Module = element(1, Object),
     %% Determine if this is an insert or an update
-    PrimaryKeyPos = primary_key_pos(Module:module_info(attributes), 1),
+    PrimaryKeyPos = primary_key_pos(Module:module_info(attributes)),
     case element(PrimaryKeyPos, Object) of
         'id' ->
             %% This is an insertion
             case insert(Object) of
                 {stopped, Obj} ->
-                    %% Remove the object
-                    delete(Obj),
                     {stopped, Obj};
                 Res ->
                     Res
             end;
-        _ ->
+        _Value ->
             update(Object)
     end.
 
-primary_key_pos([], N) ->
-    N;
-primary_key_pos([{field, _, _, Arglist}|T], N) ->
+primary_key_pos([]) ->
+    {error, not_found};
+primary_key_pos([{field, [{_Fieldname, Pos, _Type, Arglist}]}|T]) ->
     case lists:member(primary_key, Arglist) of
-	true ->
-	    primary_key_pos([], N+1);
-	false ->
-	    primary_key_pos([T], N+1)
+        true ->
+            Pos;
+        _ ->
+            primary_key_pos(T)
     end;
-primary_key_pos([_|T],N) ->
-    primary_key_pos(T, N).
+primary_key_pos([_|T]) ->
+    primary_key_pos(T).
 
 %%--------------------------------------------------------------------
 %% @doc Performs a pre-update hook for an object
@@ -242,10 +240,25 @@ insert(Object) when is_tuple(Object) ->
         {stop, _} ->
             {stopped, Object};
         {ok, true} ->
-            Module:'_post_insert'(NewObject);
+            case Module:'_post_insert'(NewObject) of
+                stop ->
+                    {stopped, Object};
+                {ok, NewObject2} ->
+                    from_all_backends(save, NewObject2)
+            end;
         _ ->
-            {ok, NewObject}
+            from_all_backends(save, NewObject)
     end.
+
+
+from_all_backends(Action, Object) ->
+    _List = lists:map(
+              fun({Poolname, _Arguments}) ->
+                      Worker = poolboy:checkout(Poolname),
+                      Res = gen_server:call(Worker, {Action, Object}),
+                      poolboy:checkin(Poolname, Worker),
+                      Res
+              end, proplists:get_value(backend, (element(1, Object)):module_info(attributes))).
 
 from_all_backends(Action, Module, Object) ->
     _List = lists:map(
