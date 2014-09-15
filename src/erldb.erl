@@ -44,8 +44,7 @@ find(Model, Conditions) ->
     find(Model, Conditions, []).
 
 find(Model, Conditions, Options) ->
-    Attributes = Model:module_info(attributes),
-    [{Poolname, _Args}|_] = proplists:get_value(backend, Attributes, []),
+    [{Poolname, _Args}|_] = get_backends(Model),
 
     Worker = poolboy:checkout(Poolname),
     Result =
@@ -70,8 +69,7 @@ find_one(Model, Conditions) ->
 
 -spec find_one(atom(), [tuple()], [tuple()]) -> tuple() | not_found.
 find_one(Model, Conditions, Options) ->
-    Attributes = Model:module_info(attributes),
-    [{Poolname, _Args}|_] = proplists:get_value(backend, Attributes, []),
+    [{Poolname, _Args}|_] = get_backends(Model),
     Worker = poolboy:checkout(Poolname),
     Result =
         case gen_server:call(Worker, {supported_operation, find_one}) of
@@ -126,8 +124,7 @@ delete(Object) when is_tuple(Object) ->
     Proceed = pre_delete(Module, Object),
     case Proceed of
         ok ->
-            _List = from_all_backends(delete, Module, Object),
-            ok;
+            from_all_backends(delete, Module, Object);
         _ ->
             ok
     end,
@@ -258,7 +255,7 @@ from_all_backends(Action, Object) ->
                       Res = gen_server:call(Worker, {Action, Object}),
                       poolboy:checkin(Poolname, Worker),
                       Res
-              end, proplists:get_value(backend, (element(1, Object)):module_info(attributes))).
+              end, get_backends(element(1, Object))).
 
 from_all_backends(Action, Module, Object) ->
     _List = lists:map(
@@ -267,4 +264,14 @@ from_all_backends(Action, Module, Object) ->
                       Res = gen_server:call(Worker, {Action, Object, Arguments}),
                       poolboy:checkin(Poolname, Worker),
                       Res
-              end, proplists:get_value(backend, Module:module_info(attributes))).
+              end, get_backends(Module)).
+
+
+
+get_backends(Module) ->
+    case proplists:get_value(backend, Module:module_info(attributes)) of
+        undefined ->
+            application:get_env(default_backend);
+        Backends ->
+            Backends
+    end.
