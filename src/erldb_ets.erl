@@ -92,27 +92,24 @@ handle_call({find, Model, Conditions, _Options}, _From, State) ->
         undefined ->
             {reply, {error, tab_not_found}, State};
         _Info ->
-            Fields = [ X || X = {Z,_Y} <- Model:module_info(attributes),
-                            Z =:= field ],
-
+            Fields = get_fields(Model),
             Match = build_match_q(Conditions, Fields),
             Object = ets:match_object(Model, Match),
             {reply, {ok, Object}, State}
     end;
 
 handle_call({delete, Model, Conditions}, _From, State) ->
-    Fields = proplists:get_value(fields, Model:module_info(attributes)),
+    Fields = get_fields(element(1, Model)),
     Match = build_match_q(Conditions, Fields),
     ObjectList = ets:match_object(Model, Match),
     lists:foreach(
       fun(Object) ->
               true = ets:delete_object(Model, Object)
       end, ObjectList),
-    lager:info("Removed ~p objects of type ~p", [length(ObjectList), Model]),
     {reply, ok, State};
 
 handle_call({supported_condition, Conditions}, _From, State) ->
-    Supported = ['='],
+    Supported = ['equals'],
     List = [Operators || {_, Operators, _} <- Conditions,
 			 lists:member(Operators, Supported) == false],
     Reply =
@@ -187,25 +184,23 @@ create_table(Model) ->
     ets:new(Model, [public, named_table, {keypos, Pos}]).
 
 
+
+
 build_match_q(QueryFields, Fields) ->
-    InitialQuery = ['_'|lists:map(fun(_) ->
-                                           '_'
-                                   end, Fields)],
-    Res = build_match_q(QueryFields, Fields, InitialQuery),
-    erlang:list_to_tuple(Res).
-
-build_match_q([], _, Query) ->
-    Query;
-build_match_q([{Fieldname, 'equals', Value}|Tl], Fields, Query) ->
-    Pos = get_field_pos(Fieldname, Fields),
-    UpdatedQuery = replace_list_item(Pos, Value, Query),
-    build_match_q(Tl, Fields, UpdatedQuery).
+    Query = ['_'|lists:map(fun(Fieldname) ->
+                                   case lists:keyfind(Fieldname, QueryFields) of
+                                       false ->
+                                           '_';
+                                       Match ->
+                                           build_col_query(Match)
+                                   end
+                           end, Fields)],
+    erlang:list_to_tuple(Query).
 
 
-replace_list_item(1, Value, [_Out|Fields]) ->
-    [Value|Fields];
-replace_list_item(Pos, Value, [Field|Fields]) ->
-    [Field|replace_list_item(Pos-1, Value, Fields)].
+build_col_query({Fieldname, 'equals', Value}) ->
+    {Fieldname, Value}.
+
 
 get_field_pos(_Fieldname, []) ->
     {error, not_found};
@@ -213,3 +208,6 @@ get_field_pos(Fieldname, [{Fieldname, Pos, _Type, _Args}|_]) ->
     Pos;
 get_field_pos(Fieldname, [_|Tl]) ->
     get_field_pos(Fieldname, Tl).
+get_fields(Model) ->
+    [ X || X = {Z,_Y} <- Model:module_info(attributes),
+           Z =:= field ].
