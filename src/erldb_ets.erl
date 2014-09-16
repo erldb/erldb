@@ -70,22 +70,52 @@ init(_Args) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call({init_table, Name, Args}, _From, State) ->
+handle_call({init_table, Model, Args}, _From, State) ->
     Options = proplists:get_value(worker_options, Args, []),
-    Result = ets:new(Name, [named_table|Options]),
+
+    Fields = get_fields(Model),
+    [PrimaryKeyPos|_] = [ Pos || {_Fieldname, Pos, _Type, Opt} <- Fields,
+                                proplists:get_value(primary_key, Opt) /= undefined ],
+
+    Result = ets:new(Model, [named_table, {keypos, PrimaryKeyPos}|Options]),
     {reply, {ok, Result}, State};
 
 handle_call({save, Object}, _From, State) ->
     Model = element(1, Object),
-    case ets:info(Model) of
-        undefined ->
-            %% We might need to create the tab first
-            create_table(Model),
-            true = ets:insert(Model, Object);
-        _Info ->
-            true = ets:insert(Model, Object)
-    end,
-    {reply, ok, State};
+    Fields = get_fields(Model),
+    [PrimaryKeyPos|_] = [ Pos || {_Fieldname, Pos, _Type, Opt} <- Fields,
+                                 proplists:get_value(primary_key, Opt) /= undefined ],
+
+    UpdatedObject =
+        case ets:last(Model) of
+            '$end_of_table' ->
+                erlang:setelement(PrimaryKeyPos, Object, 1);
+            Number when is_integer(Number) ->
+                erlang:setelement(PrimaryKeyPos, Object, Number+1);
+            _ ->
+                %% We don't do anything with this since we don't know what kind of scheme we're running at
+                Object
+        end,
+
+    true = ets:insert_new(Model, UpdatedObject),
+    {reply, UpdatedObject, State};
+
+handle_call({update, Object}, _From, State) ->
+    Model = element(1, Object),
+    Fields = get_fields(Model),
+    [PrimaryKeyPos|_] = [ Pos || {_Fieldname, Pos, _Type, Opt} <- Fields,
+                                 proplists:get_value(primary_key, Opt) /= undefined ],
+    UpdatedObject =
+        case ets:last(Model) of
+            '$end_of_table' ->
+                erlang:setelement(PrimaryKeyPos, Object, 1);
+            Number when is_integer(Number) ->
+                erlang:setelement(PrimaryKeyPos, Object, Number+1);
+            _ ->
+                Object
+        end,
+    true = ets:insert(Model, UpdatedObject),
+    {reply, UpdatedObject, State};
 
 handle_call({find, Model, Conditions, _Options}, _From, State) ->
     case ets:info(Model) of
@@ -95,16 +125,16 @@ handle_call({find, Model, Conditions, _Options}, _From, State) ->
             Fields = get_fields(Model),
             Match = build_match_q(Conditions, Fields),
             Object = ets:match_object(Model, Match),
-            {reply, {ok, Object}, State}
+            {reply, Object, State}
     end;
 
-handle_call({delete, Model, Conditions}, _From, State) ->
-    Fields = get_fields(element(1, Model)),
-    Match = build_match_q(Conditions, Fields),
+handle_call({delete, Object}, _From, State) ->
+    Model = element(1, Object),
+    Match = build_match_q_from_object(Object),
     ObjectList = ets:match_object(Model, Match),
     lists:foreach(
-      fun(Object) ->
-              true = ets:delete_object(Model, Object)
+      fun(Obj) ->
+              true = ets:delete_object(Model, Obj)
       end, ObjectList),
     {reply, ok, State};
 
@@ -177,18 +207,14 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-create_table(Model) ->
-    Fields = proplists:get_value(fields, Model:module_info(attributes), []),
-    {Fieldname, _, _} = lists:keyfind(primary_key, 2, Fields),
-    Pos = get_field_pos(Fieldname, Fields),
-    ets:new(Model, [public, named_table, {keypos, Pos}]).
+
 
 
 
 
 build_match_q(QueryFields, Fields) ->
-    Query = ['_'|lists:map(fun(Fieldname) ->
-                                   case lists:keyfind(Fieldname, QueryFields) of
+    Query = ['_'|lists:map(fun({Fieldname, _, _, _}) ->
+                                   case lists:keyfind(Fieldname, 1, QueryFields) of
                                        false ->
                                            '_';
                                        Match ->
@@ -198,16 +224,19 @@ build_match_q(QueryFields, Fields) ->
     erlang:list_to_tuple(Query).
 
 
-build_col_query({Fieldname, 'equals', Value}) ->
-    {Fieldname, Value}.
+build_col_query({_Fieldname, 'equals', Value}) ->
+    Value.
 
-
-get_field_pos(_Fieldname, []) ->
-    {error, not_found};
-get_field_pos(Fieldname, [{Fieldname, Pos, _Type, _Args}|_]) ->
-    Pos;
-get_field_pos(Fieldname, [_|Tl]) ->
-    get_field_pos(Fieldname, Tl).
 get_fields(Model) ->
-    [ X || X = {Z,_Y} <- Model:module_info(attributes),
+    [ Y || {Z,[Y]} <- Model:module_info(attributes),
            Z =:= field ].
+
+
+
+build_match_q_from_object(Object) ->
+    Model = element(1, Object),
+    Fields = get_fields(Model),
+    Query = [Model|lists:map(fun({field, [{_Fieldname, Pos, _, _}]}) ->
+                                     element(Pos, Object)
+                             end, Fields)],
+    erlang:list_to_tuple(Query).

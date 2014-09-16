@@ -15,6 +15,7 @@
          find_one/2,
          find_one/3,
          delete/1,
+         delete/2,
          save/1
         ]).
 
@@ -45,14 +46,14 @@ find(Model, Conditions) ->
 
 find(Model, Conditions, Options) ->
     [{Poolname, _Args}|_] = get_backends(Model),
-
+    NConditions = normalize_conditions(Conditions),
     Worker = poolboy:checkout(Poolname),
     Result =
-        case gen_server:call(Worker, {supported_condition, Conditions}) of
+        case gen_server:call(Worker, {supported_condition, NConditions}) of
             {ok, supported} ->
-                gen_server:call(Worker, {find, Model, Conditions, Options});
+                gen_server:call(Worker, {find, Model, NConditions, Options});
             {error, not_supported, Operator} ->
-                lager:error("'~p' does not support query operator '~p'", [Model, Operator]),
+                io:format("'~p' does not support query operator: ~p~n", [Model, Operator]),
                 {error, op_not_supported}
         end,
     poolboy:checkin(Poolname, Worker),
@@ -118,13 +119,22 @@ post_delete(Module, Object) ->
             end
     end.
 
+-spec delete(atom(), [{atom(), atom(), any()}|{atom(), any()}]) -> ok | [ok].
+delete(Model, Conditions) ->
+    case find(Model, Conditions) of
+        {ok, []} ->
+            ok;
+        {ok, List} ->
+            [ delete(X) || X <- List ]
+    end.
+
 -spec delete(tuple()) -> ok.
 delete(Object) when is_tuple(Object) ->
     Module = element(1, Object),
     Proceed = pre_delete(Module, Object),
     case Proceed of
         ok ->
-            from_all_backends(delete, Module, Object);
+            from_all_backends(delete, Object);
         _ ->
             ok
     end,
@@ -198,7 +208,7 @@ update(Object) when is_tuple(Object) ->
     UpdateRes =
         case Proceed of
             ok ->
-                Res = from_all_backends(update, Module, Object),
+                Res = from_all_backends(update, Object),
                 lists:any(fun({ok, _}) -> true; (_) -> false end, Res);
             stop ->
                 []
@@ -257,17 +267,6 @@ from_all_backends(Action, Object) ->
                       Res
               end, get_backends(element(1, Object))).
 
-from_all_backends(Action, Module, Object) ->
-    _List = lists:map(
-              fun({Poolname, Arguments}) ->
-                      Worker = poolboy:checkout(Poolname),
-                      Res = gen_server:call(Worker, {Action, Object, Arguments}),
-                      poolboy:checkin(Poolname, Worker),
-                      Res
-              end, get_backends(Module)).
-
-
-
 get_backends(Module) ->
     case proplists:get_value(backend, Module:module_info(attributes)) of
         undefined ->
@@ -275,3 +274,9 @@ get_backends(Module) ->
         Backends ->
             Backends
     end.
+
+normalize_conditions([]) -> [];
+normalize_conditions([{Fieldname, Value}|Tl]) ->
+    [{Fieldname, 'equals', Value}|normalize_conditions(Tl)];
+normalize_conditions([Hd|Tl]) ->
+    [Hd|normalize_conditions(Tl)].
