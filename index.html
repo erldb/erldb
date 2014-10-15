@@ -1,122 +1,159 @@
-<!DOCTYPE html>
+<!doctype html>
+<!-- The Time Machine GitHub pages theme was designed and developed by Jon Rohan, on Feb 7, 2012. -->
+<!-- Follow him for fun. http://twitter.com/jonrohan. Tail his code on http://github.com/jonrohan -->
 <html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
 
-  <head>
-    <meta charset='utf-8' />
-    <meta http-equiv="X-UA-Compatible" content="chrome=1" />
-    <meta name="description" content="Erldb : ORM implementation in Erlang" />
+  <link rel="stylesheet" href="stylesheets/stylesheet.css" media="screen">
+  <link rel="stylesheet" href="stylesheets/pygment_trac.css">
+  <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+  <script type="text/javascript" src="javascripts/script.js"></script>
 
-    <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
+  <title>Erldb</title>
+  <meta name="description" content="ORM implementation in Erlang">
 
-    <title>Erldb</title>
-  </head>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
 
-  <body>
+</head>
 
-    <!-- HEADER -->
-    <div id="header_wrap" class="outer">
-        <header class="inner">
-          <a id="forkme_banner" href="https://github.com/erldb/ErlDB">View on GitHub</a>
+<body>
 
-          <h1 id="project_title">Erldb</h1>
-          <h2 id="project_tagline">ORM implementation in Erlang</h2>
+  <div class="wrapper">
+    <header>
+      <h1 class="title">Erldb</h1>
+    </header>
+    <div id="container">
+      <p class="tagline">ORM implementation in Erlang</p>
+      <div id="main" role="main">
+        <div class="download-bar">
+        <div class="inner">
+          <a href="https://github.com/erldb/erldb/tarball/master" class="download-button tar"><span>Download</span></a>
+          <a href="https://github.com/erldb/erldb/zipball/master" class="download-button zip"><span>Download</span></a>
+          <a href="https://github.com/erldb/erldb" class="code">View Erldb on GitHub</a>
+        </div>
+        <span class="blc"></span><span class="trc"></span>
+        </div>
+        <article class="markdown-body">
+          <h1>
+<a name="erldb" class="anchor" href="#erldb"><span class="octicon octicon-link"></span></a>erldb</h1>
 
-            <section id="downloads">
-              <a class="zip_download_link" href="https://github.com/erldb/ErlDB/zipball/master">Download this project as a .zip file</a>
-              <a class="tar_download_link" href="https://github.com/erldb/ErlDB/tarball/master">Download this project as a tar.gz file</a>
-            </section>
-        </header>
-    </div>
-
-    <!-- MAIN CONTENT -->
-    <div id="main_content_wrap" class="outer">
-      <section id="main_content" class="inner">
-        <h1>
-<a name="erl_db" class="anchor" href="#erl_db"><span class="octicon octicon-link"></span></a>Erl_DB</h1>
+<p><a href="https://travis-ci.org/erldb/erldb"><img src="https://travis-ci.org/erldb/erldb.svg?branch=master" alt="Build Status"></a></p>
 
 <p>ORM (Object-relational mapping) application implemented in Erlang.</p>
 
 <h1>
-<a name="model-files" class="anchor" href="#model-files"><span class="octicon octicon-link"></span></a>Model files</h1>
-
-<p>Check 'testmodel.model' in the examples/ directory</p>
+<a name="configure-erldb" class="anchor" href="#configure-erldb"><span class="octicon octicon-link"></span></a>Configure erldb</h1>
 
 <h1>
-<a name="usage" class="anchor" href="#usage"><span class="octicon octicon-link"></span></a>Usage:</h1>
+<a name="writing-models" class="anchor" href="#writing-models"><span class="octicon octicon-link"></span></a>Writing models</h1>
 
-<p>This is the example model that is in examples directory:</p>
+<h2>
+<a name="basic-structure" class="anchor" href="#basic-structure"><span class="octicon octicon-link"></span></a>Basic structure</h2>
 
-<pre><code> import: users, tags
+<p>A model is defined by a basic set of attributes.</p>
 
- name: blog_entry
- backend: mnesia
+<h2>
+<a name="relations" class="anchor" href="#relations"><span class="octicon octicon-link"></span></a>Relations</h2>
 
- /* This is a test comment */
+<p>There is currently two different relations in erldb;</p>
 
- fields:
-    id :: primary_key(auto_increment)
-    title :: string(max_length = 255, index)
-    author :: string(max_length = 100)
-    created :: datetime()
-    text :: string()
+<p><code>-relation(has, AMOUNT, MODEL_NAME).</code> - Defines a one to AMOUNT relation.
+<code>-relation(belongs_to, MODEL_NAME).</code></p>
+
+<h2>
+<a name="trigger-functions" class="anchor" href="#trigger-functions"><span class="octicon octicon-link"></span></a>Trigger functions</h2>
+
+<h3>
+<a name="pre-triggers" class="anchor" href="#pre-triggers"><span class="octicon octicon-link"></span></a>Pre triggers</h3>
+
+<h3>
+<a name="post-triggers" class="anchor" href="#post-triggers"><span class="octicon octicon-link"></span></a>Post triggers</h3>
+
+<h2>
+<a name="compile-the-models" class="anchor" href="#compile-the-models"><span class="octicon octicon-link"></span></a>Compile the models</h2>
+
+<h1>
+<a name="get-workers" class="anchor" href="#get-workers"><span class="octicon octicon-link"></span></a>Get workers</h1>
+
+<p>TBA</p>
+
+<h1>
+<a name="build" class="anchor" href="#build"><span class="octicon octicon-link"></span></a>Build</h1>
+
+<p>To build erldb use Makefile to build.</p>
+
+<pre><code>  $ make
 </code></pre>
 
-<p>To get your workers they are stored as deps in rebar.config in our config we have a mnesia worker.</p>
+<p>make also builds your model that is in your application environment.</p>
 
-<pre><code>   {erl_db_mnesia, ",*", {git, "git@github.com:Taure/erl_db_mnesia.git", "master"}}
+<h2>
+<a name="documentation" class="anchor" href="#documentation"><span class="octicon octicon-link"></span></a>Documentation</h2>
+
+<p>To generate documentation of erldb:</p>
+
+<pre><code>  $ make docs
 </code></pre>
 
-<p>This is a worker that help us to do basic things with mnesia to get it use:</p>
+<h1>
+<a name="try-it-out" class="anchor" href="#try-it-out"><span class="octicon octicon-link"></span></a>Try it out!!</h1>
 
-<pre><code>    rebar get-deps
+<p>Check the <code>models/</code>-directory for example models. To compile the model tags.erl;</p>
+
+<pre><code>  $ make
+   APP    poolboy.app.src
+   APP    erldb.app.src
+  ./priv/compilemodel
+  model_path: "./models"
+  Start compiling
+  "author.erl"... {ok,"author.beam"}
+  "tags.erl"... {ok,"tags.beam"}
+  Done compiling
 </code></pre>
 
-<p>To compile your code and to compile your models.</p>
+<p>Now you can read the record definitions for each of the models within erlang:</p>
 
-<pre><code>    rebar compile model
+<pre><code>  $ erl -pa ebin/ deps/*/ebin
+  Erlang R16B01 (erts-5.10.2) [source-bdf5300] [64-bit] [smp:4:4] [async-threads:10] [hipe] [kernel-poll:false]
+
+  Eshell V5.10.2  (abort with ^G)
+  1&gt; rr("include/tags.hrl").
+  [tags]
+  2&gt; A = #tags{}.
+  #tags{id = undefined,title = "Fancy title",text = undefined,
+        created = undefined}
+  3&gt; B = A:uppercase_title().
+  "FANCY TITLE"
+  4&gt; B:save()
+  {ok,#tags{author_id = undefined,id = id,
+          title = "FANCY TITLE",text = undefined,created = undefined}}
+  5&gt; erldb:find(tags, []).
+  {ok,[#tags{author_id = undefined,id = id,
+           title = "FANCY TITLE",text = undefined,
+           created = undefined}]}
 </code></pre>
-
-<p>Then start a shell (I did it with erl -pa ebin -pa deps/*/ebin)</p>
-
-<pre><code>    Eshell V5.9.2  (abort with ^G)
-    1&gt; application:start(erl_db).
-    21:41:44.883 [info] Application lager started on node nonode@nohost
-    21:41:44.951 [info] Application mnesia started on node nonode@nohost
-    21:41:44.951 [info] Application erl_db started on node nonode@nohost
-    ok
-</code></pre>
-
-<p>Here you will see that mnesia is started. It is started in the worker so now we know that the worker is loaded. (Maybe we should say something like a log message)</p>
-
-<pre><code>    2&gt; FirstEntry = blog_entry:new(id, "My title", "Mr Imsobad", now(), "This is my first blog entry. And it is stored in mnesia. Hope I don't forget that").
-    {blog_entry,id,"My title","Mr Imsobad",
-                      {1361,393556,541209},
-                      "This is my first blog entry. And it is stored in mnesia. Hope I don't forget that"}
-</code></pre>
-
-<p>This is our first entry in our blog, now we will try to store it.</p>
-
-<pre><code>    3&gt; erl_db:create_table(blog_entry).
-    {atomic,ok}
-    4&gt; erl_db:save(FirstEntry).
-    {atomic,ok}
-    5&gt;  erl_db:find(blog_entry, 1).
-    {atomic,[{blog_entry,1,"My title","Mr Imsobad",
-                 {1361,469740,519505},
-                 "This is my first blog entry. And it is stored in mnesia. Hope I don't forget that"}]}
-</code></pre>
-      </section>
+        </article>
+      </div>
     </div>
+    <footer>
+      <div class="owner">
+      <p><a href="https://github.com/erldb" class="avatar"><img src="https://avatars2.githubusercontent.com/u/3672878?v=2&amp;s=60" width="48" height="48"></a> <a href="https://github.com/erldb">erldb</a> maintains <a href="https://github.com/erldb/erldb">Erldb</a></p>
 
-    <!-- FOOTER  -->
-    <div id="footer_wrap" class="outer">
-      <footer class="inner">
-        <p class="copyright">Erldb maintained by <a href="https://github.com/erldb">erldb</a></p>
-        <p>Published with <a href="http://pages.github.com">GitHub Pages</a></p>
-      </footer>
-    </div>
 
-    
+      </div>
+      <div class="creds">
+        <small>This page generated using <a href="http://pages.github.com/">GitHub Pages</a><br>theme by <a href="https://twitter.com/jonrohan/">Jon Rohan</a></small>
+      </div>
+    </footer>
+  </div>
+  <div class="current-section">
+    <a href="#top">Scroll to top</a>
+    <a href="https://github.com/erldb/erldb/tarball/master" class="tar">tar</a><a href="https://github.com/erldb/erldb/zipball/master" class="zip">zip</a><a href="" class="code">source code</a>
+    <p class="name"></p>
+  </div>
 
-  </body>
+  
+</body>
 </html>
