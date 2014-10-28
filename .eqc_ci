@@ -1,4 +1,5 @@
 {build, "make"}.
 {test_path, "test"}.
 {deps, "deps/*/ebin"}.
+{deps, "deps/poolboy/ebin"}.
 {test_root, "test"}.
