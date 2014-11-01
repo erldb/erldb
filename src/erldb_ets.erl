@@ -77,7 +77,7 @@ handle_call({init_table, Model, Args}, _From, State) ->
     [PrimaryKeyPos|_] = [ Pos || {_Fieldname, Pos, _Type, Opt} <- Fields,
                                 proplists:get_value(primary_key, Opt) /= undefined ],
 
-    Result = ets:new(Model, [named_table, {keypos, PrimaryKeyPos}|Options]),
+    Result = ets:new(Model, [named_table, public, {keypos, PrimaryKeyPos}|Options]),
     {reply, {ok, Result}, State};
 
 handle_call({save, Object}, _From, State) ->
@@ -125,7 +125,7 @@ handle_call({find, Model, Conditions, _Options}, _From, State) ->
             Fields = get_fields(Model),
             Match = build_match_q(Conditions, Fields),
             Object = ets:match_object(Model, Match),
-            {reply, Object, State}
+            {reply, {ok, Object}, State}
     end;
 
 handle_call({delete, Object}, _From, State) ->
