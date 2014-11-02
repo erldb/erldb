@@ -236,7 +236,7 @@ get_fields(Model) ->
 build_match_q_from_object(Object) ->
     Model = element(1, Object),
     Fields = get_fields(Model),
-    Query = [Model|lists:map(fun({field, [{_Fieldname, Pos, _, _}]}) ->
+    Query = [Model|lists:map(fun({_Fieldname, Pos, _, _}) ->
                                      element(Pos, Object)
                              end, Fields)],
     erlang:list_to_tuple(Query).
