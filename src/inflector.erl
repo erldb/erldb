@@ -233,83 +233,83 @@ uncountables() ->
      "equipment" ].
 
 
-%% Tests
-replace_test() ->
-    SampleList = [ {"abc", "def"},
-		   {"a(b|c)d", "e\\1e"},
-		   {"howdy", "doody"} ],
-    "I know my defs" = replace( "I know my abcs", SampleList ),
-    "Nothing changed" = replace( "Nothing changed", SampleList ),
-    "Blah ebe" = replace("Blah abd", SampleList ),
-    "Howdy ece" = replace("Howdy acd", SampleList ),
-    "doody ho" = replace("howdy ho", SampleList ),
-    "doody" = replace("howdy", SampleList ).
+%% %% Tests
+%% replace_test() ->
+%%     SampleList = [ {"abc", "def"},
+%% 		   {"a(b|c)d", "e\\1e"},
+%% 		   {"howdy", "doody"} ],
+%%     "I know my defs" = replace( "I know my abcs", SampleList ),
+%%     "Nothing changed" = replace( "Nothing changed", SampleList ),
+%%     "Blah ebe" = replace("Blah abd", SampleList ),
+%%     "Howdy ece" = replace("Howdy acd", SampleList ),
+%%     "doody ho" = replace("howdy ho", SampleList ),
+%%     "doody" = replace("howdy", SampleList ).
 
-singularize_test() ->
-    "dog" = singularize("dogs"),
-    "mouse" = singularize("mice"),
-    "bus" = singularize("buses"),
-    "sex" = singularize("sexes"),
-    "Sex" = singularize("Sexes"),
-    "sheep" = singularize("sheep"),
-    "child" = singularize("children"),
-    "dog" = singularize("dog").
+%% singularize_test() ->
+%%     "dog" = singularize("dogs"),
+%%     "mouse" = singularize("mice"),
+%%     "bus" = singularize("buses"),
+%%     "sex" = singularize("sexes"),
+%%     "Sex" = singularize("Sexes"),
+%%     "sheep" = singularize("sheep"),
+%%     "child" = singularize("children"),
+%%     "dog" = singularize("dog").
     
-pluralize_test() ->
-    "dogs" = pluralize("dog"),
-    "dogs" = pluralize("dogs"),
-    "buses" = pluralize("bus"),
-    "sexes" = pluralize("sex"),
-    "sheep" = pluralize("sheep"),
-    "children" = pluralize("child").
+%% pluralize_test() ->
+%%     "dogs" = pluralize("dog"),
+%%     "dogs" = pluralize("dogs"),
+%%     "buses" = pluralize("bus"),
+%%     "sexes" = pluralize("sex"),
+%%     "sheep" = pluralize("sheep"),
+%%     "children" = pluralize("child").
 
-camelize_test() ->
-    "CamelCase" = camelize("camel_case").
+%% camelize_test() ->
+%%     "CamelCase" = camelize("camel_case").
 
-lower_camelize_test() ->
-    "camelCase" = lower_camelize("camel_case").
+%% lower_camelize_test() ->
+%%     "camelCase" = lower_camelize("camel_case").
 
-humanize_test() ->
-    "Employee salary" = humanize("employee_salary").
+%% humanize_test() ->
+%%     "Employee salary" = humanize("employee_salary").
 
-titleize_test() ->
-    "Army Of Darkness" = titleize("army of darkness"),
-    "Army Of Darkness" = titleize("army_of_darkness").
+%% titleize_test() ->
+%%     "Army Of Darkness" = titleize("army of darkness"),
+%%     "Army Of Darkness" = titleize("army_of_darkness").
 
-capitalize_test() ->
-    "This" = capitalize("this"),
-    "This" = capitalize("tHiS"),
-    "This" = capitalize("THIS").
+%% capitalize_test() ->
+%%     "This" = capitalize("this"),
+%%     "This" = capitalize("tHiS"),
+%%     "This" = capitalize("THIS").
 
-underscore_test() ->
-    "this_is_a_test" = underscore("ThisIsATest").
+%% underscore_test() ->
+%%     "this_is_a_test" = underscore("ThisIsATest").
 
-dasherize_test() ->
-    "this-has-dashes-now" = dasherize("this_has_dashes_now").
+%% dasherize_test() ->
+%%     "this-has-dashes-now" = dasherize("this_has_dashes_now").
 
-tableize_test() ->
-    "raw_scaled_scorers" = tableize("RawScaledScorer"),
-    "egg_and_hams" = tableize("egg_and_ham"),
-    "fancy_categories" = tableize("fancyCategory").
+%% tableize_test() ->
+%%     "raw_scaled_scorers" = tableize("RawScaledScorer"),
+%%     "egg_and_hams" = tableize("egg_and_ham"),
+%%     "fancy_categories" = tableize("fancyCategory").
 
-moduleize_test() ->
-    "FancyCategory" = moduleize("fancy_categories"),
-    "FancyCategory" = moduleize("fancy_category").
+%% moduleize_test() ->
+%%     "FancyCategory" = moduleize("fancy_categories"),
+%%     "FancyCategory" = moduleize("fancy_category").
 
-ordinalize_test() ->
-    "1st" = ordinalize(1),
-    "2nd" = ordinalize(2),
-    "1002nd" = ordinalize(1002),
-    "4th" = ordinalize(4),
-    "104th" = ordinalize(104).
+%% ordinalize_test() ->
+%%     "1st" = ordinalize(1),
+%%     "2nd" = ordinalize(2),
+%%     "1002nd" = ordinalize(1002),
+%%     "4th" = ordinalize(4),
+%%     "104th" = ordinalize(104).
 
-foreign_key_test() ->
-    "message_id" = foreign_key("Message").
+%% foreign_key_test() ->
+%%     "message_id" = foreign_key("Message").
 
-cached_re_test() ->
-    {ok, RE1} = cached_re("Abcdefg", []),
-    {ok, RE2} = cached_re("yuuuu", []),
-    {ok, RE1_1} = cached_re("Abcdefg", []),
-    true = (RE1 =:= RE1_1),
-    false = (RE2 =:= RE1), 
-    "QQQ?UUU" == re_replace( "QQQAbcdefgUUU", RE1_1, "?" ).
+%% cached_re_test() ->
+%%     {ok, RE1} = cached_re("Abcdefg", []),
+%%     {ok, RE2} = cached_re("yuuuu", []),
+%%     {ok, RE1_1} = cached_re("Abcdefg", []),
+%%     true = (RE1 =:= RE1_1),
+%%     false = (RE2 =:= RE1), 
+%%     "QQQ?UUU" == re_replace( "QQQAbcdefgUUU", RE1_1, "?" ).
