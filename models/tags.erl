@@ -6,9 +6,9 @@
 -backend(ets, []).
 -relation(belongs_to, author).
 
--field(id, string, [primary_key]).
--field(title, string, [{default, "Fancy title"}]).
--field(text, string, []).
+-field(id, string, [primary_key, {length, 128}]).
+-field(title, string, [{default, "Fancy title"}, {length, 128}]).
+-field(text, string, [{length, 128}]).
 -field(created, datetime, []).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -43,19 +43,23 @@ _post_update(NewObject, UpdateRes) ->
 
 %% Inserts a new object into the database if the title /= undefined
 _pre_insert(Object) ->
+    io:format("pre_insert~n"),
     case Object#tags.title of
         undefined ->
             stop;
         _ ->
+            io:format("OK on pre_insert~n"),
             {ok, Object}
     end.
 
 %% If the title was equal to "PHP" we abort the insertion.
 _post_insert(Object) ->
+    io:format("Post insert~n"),
     case Object#tags.title of
         "PHP" ->
             stop;
         _ ->
+            io:format("OK on post_insert~n"),
             {ok, Object}
     end.
 
