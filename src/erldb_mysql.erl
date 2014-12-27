@@ -88,6 +88,25 @@ handle_call({init_table, Model, _Args}, _From, State) ->
     Fields = erldb_lib:get_fields(Model),
     Res = create_table(State#state.connection, Model, Fields),
     {reply, Res, State};
+handle_call({save, Object}, _From, State) ->
+    Model = erlang:element(1, Object),
+    Zipper = erldb_lib:unzip_object(Object),
+    {Fields, Values} =
+        lists:foldl(
+          fun({'id', 'id', _Type, _Args}, Acc) -> Acc;
+             ({'id', Val, Type, Args}, {Attrs, Vals}) -> {["id"|Attrs], [pack_value(Val, Type, Args)|Vals]};
+             ({Field, Val, Type, Args}, {Attrs, Vals}) ->
+                  {[atom_to_list(Field)|Attrs], [pack_value(Val, Type, Args)|Vals]}
+          end, {[], []}, Zipper),
+
+    SQL = ["INSERT INTO ", atom_to_list(Model), " (",
+           string:join(escape_attr(Fields), ", "),
+           ") VALUES (",
+           string:join(Values, ", ") ++
+           ")"
+          ],
+    Res = fetch(State#state.connection, SQL),
+    {reply, Res, State};
 handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
@@ -149,7 +168,7 @@ code_change(_OldVsn, State, _Extra) ->
 fetch(Conn, Query) ->
     Res = mysql_conn:fetch(Conn, [Query], self()),
     case Res of
-        {error, MysqlRes} = Err ->
+        {error, _MysqlRes} = Err ->
             Err;
         _ -> ok
     end,
@@ -169,6 +188,10 @@ table_definition_to_sql_columns([{Fieldname, _Pos, Fieldtype, Args}|Tl]) ->
              end,
     [erlang:atom_to_list(Fieldname) ++ " " ++
      type_to_sql(Fieldtype) ++ Length ++ " " ++ options_to_sql(Args)|table_definition_to_sql_columns(Tl)].
+
+
+escape_attr(Attributes) ->
+    [ ["`", Attribute, "`"] || Attribute <- Attributes ].
 
 options_to_sql([]) -> [];
 options_to_sql([{length, _}|Tl]) -> options_to_sql(Tl);
@@ -197,6 +220,25 @@ options_to_sql([{storage, Type}|Tl]) ->
           end,
     ["STORAGE " ++ Res|options_to_sql(Tl)].
 
+
+pack_value(undefined, _Type, Args) ->
+    proplists:get_value(default, Args, "NULL");
+pack_value(true, _Type, _Args) ->
+    "TRUE";
+pack_value(false, _Type, _Args) ->
+    "FALSE";
+pack_value(Value, _Type, _Args) when is_integer(Value) ->
+    integer_to_list(Value);
+pack_value(Value, _Type, _Args) when is_binary(Value) ->
+    binary_to_list(Value);
+pack_value(Value, _Type, _Args) when is_float(Value) ->
+    float_to_list(Value);
+pack_value(Value, _Type, _Args) when is_atom(Value) ->
+    atom_to_list(Value);
+pack_value({_,_,_} = DT, _Type, _Args) ->
+    dh_date:format("'Y-m-d H:i:s'", DT);
+pack_value(Value, _Type, _Args) when is_list(Value) ->
+    "'" ++ Value ++ "'".
 
 type_to_sql(ok) ->
     "INTEGER";
