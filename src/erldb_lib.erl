@@ -1,11 +1,8 @@
 -module(erldb_lib).
 -export([
          get_fields/1,
-         unzip_object/1,
-         make_test/0
+         unzip_object/1
         ]).
-
--include("include/tags.hrl").
 
 is_loaded(Model) ->
     case code:ensure_loaded(Model) of
@@ -30,10 +27,3 @@ unzip_object(Object) ->
                     {Field, element(Position, Object), Type, Args}
             end, Fields),
     Res.
-
-
-
-make_test() ->
-    {ok, Pid} = erldb_mysql:start_link([{worker_args, [{db_username, "root"}, {db_password, "root"}]}]),
-    A = #tags{author_id=0, id=1, text="HERRO", created=erlang:now()},
-    gen_server:call(Pid, {save, A}).
