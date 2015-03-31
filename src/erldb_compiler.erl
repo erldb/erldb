@@ -20,7 +20,7 @@
           attributes = [] :: [tuple()],
           body = [] :: [tuple()],
           relations = [] :: [tuple()],
-          fc = 2 :: integer() %% Field counter. Starts on 2 since 1 contains the record-name
+          fc = 1 :: integer() %% Field counter. Starts on 1 since 1 contains the record-name
          }).
 
 -record(compiler_state, {
@@ -70,7 +70,7 @@ do_compile(Filename, CompilerState = #compiler_state{includedir = IncludeDir,
                         end, 2, ParsedForms),
 
             ModelState2 = lists:foldl(fun(X, State) -> post_parse(X, State) end,
-                                      CompilerState#compiler_state.model_state#model_state{fc = NFields}, ParsedForms),
+                                      CompilerState#compiler_state.model_state#model_state{fc = NFields-1}, ParsedForms),
             Hrl = generate_hrl(list_to_atom(Modelname), ModelState2#model_state.fields),
             TypeDefinition = lists:concat(["\n-type ", Modelname, "_model() :: #", Modelname, "{}."]),
             {ok, GenHrl} = erl_parse:parse(element(2, erl_scan:string(Hrl))),
@@ -307,7 +307,7 @@ generate_beam(#compiler_state{outdir = OutDir,
             _Module = code:load_binary(ModuleName, "", Binary),
             BeamFilename = filename:join([atom_to_list(ModuleName) ++ ".beam"]),
             ok = file:write_file(filename:join([OutDir, BeamFilename]), Binary),
-            {ok, ModuleName, BeamFilename};
+            {ok, ModuleName};
         _ ->
             ok
     end.
