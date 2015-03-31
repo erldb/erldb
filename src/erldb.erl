@@ -8,6 +8,7 @@
 %%%-------------------------------------------------------------------
 -module(erldb).
 -export([
+         init_table/1,
          start/1,
          stop/0,
          find/2,
@@ -16,7 +17,8 @@
          find_one/3,
          delete/1,
          delete/2,
-         save/1
+         save/1,
+         create_table/1
         ]).
 
 %%--------------------------------------------------------------------
@@ -35,6 +37,13 @@ start(_Args) ->
 stop() ->
     application:stop(erldb).
 
+
+init_table(Model) ->
+    [{Poolname, _Args}|_] = get_backends(Model),
+    poolboy:transaction(Poolname, fun(Worker) ->
+                                          gen_server:call(Worker, {init_table, Model, []})
+                                  end).
+
 %%--------------------------------------------------------------------
 %% @doc Searches for models with the given conditions
 %%
@@ -47,17 +56,15 @@ find(Model, Conditions) ->
 find(Model, Conditions, Options) ->
     [{Poolname, _Args}|_] = get_backends(Model),
     NConditions = normalize_conditions(Conditions),
-    Worker = poolboy:checkout(Poolname),
-    Result =
-        case gen_server:call(Worker, {supported_condition, NConditions}) of
-            {ok, supported} ->
-                gen_server:call(Worker, {find, Model, NConditions, Options});
-            {error, not_supported, Operator} ->
-                io:format("'~p' does not support query operator: ~p~n", [Model, Operator]),
-                {error, op_not_supported}
-        end,
-    poolboy:checkin(Poolname, Worker),
-    Result.
+    poolboy:transaction(Poolname, fun(Worker) ->
+                                          case gen_server:call(Worker, {supported_condition, NConditions}) of
+                                              {ok, supported} ->
+                                                  gen_server:call(Worker, {find, Model, NConditions, Options});
+                                              {error, not_supported, Operator} ->
+                                                  io:format("'~p' does not support query operator: ~p~n", [Model, Operator]),
+                                                  {error, op_not_supported}
+                                          end
+                                  end).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -71,21 +78,30 @@ find_one(Model, Conditions) ->
 -spec find_one(atom(), [tuple()], [tuple()]) -> tuple() | not_found.
 find_one(Model, Conditions, Options) ->
     [{Poolname, _Args}|_] = get_backends(Model),
-    Worker = poolboy:checkout(Poolname),
-    Result =
-        case gen_server:call(Worker, {supported_operation, find_one}) of
-            {error, op_not_supported} ->
-                case find(Model, Conditions, Options) of
-                    {ok, [E|_]} ->
-                        E;
-                    _ ->
-                        not_found
-                end;
-            {ok, supported} ->
-                gen_server:call(Worker, {find_one, Model, Conditions, Options})
-        end,
-    poolboy:checkin(Poolname, Worker),
-    Result.
+    poolboy:transaction(Poolname, fun(Worker) ->
+                                          case gen_server:call(Worker, {supported_operation, find_one}) of
+                                              {error, op_not_supported} ->
+                                                  case find(Model, Conditions, Options) of
+                                                      {ok, [E|_]} ->
+                                                          E;
+                                                      _ ->
+                                                          not_found
+                                                  end;
+                                              {ok, supported} ->
+                                                  gen_server:call(Worker, {find_one, Model, Conditions, Options})
+                                          end
+                                  end).
+
+create_table(Model) when is_atom(Model) ->
+    case is_valid_model(Model) of
+        true ->
+            [{Poolname, _Args}|_] = get_backends(Model),
+            poolboy:transaction(Poolname, fun(Worker) ->
+                                                  gen_server:call(Worker, {init_table, Model, []})
+                                          end);
+        _Args ->
+            {error, invalid_model}
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc Deletes the specified 'Object'.
@@ -155,8 +171,13 @@ save(Object) when is_tuple(Object) ->
             case insert(Object) of
                 {stopped, Obj} ->
                     {stopped, Obj};
+                {ok, Res} ->
+                    [{Poolname, _Args}|_] = get_backends(Module),
+                    poolboy:transaction(Poolname, fun(Worker) ->
+                                                          gen_server:call(Worker, {save, Res})
+                                                  end);
                 Res ->
-                    Res
+                    io:format("~p~n", [Res])
             end;
         _Value ->
             update(Object)
@@ -195,6 +216,25 @@ pre_update(Module, Object) ->
             {ok, Object}
     end.
 
+%%--------------------------------------------------------------------
+%% @doc Performs a post-update hook for an object
+%% Post-update is called, if exists, right after the update is done.
+%% If the hook returns the atom 'stop' the update is aborted.
+%% @end
+%%--------------------------------------------------------------------
+-spec post_update(Module :: atom(), Object :: tuple()) -> {ok, Object :: tuple()} | {stop, undefined}.
+post_update(Module, Object) ->
+    case erlang:function_exported(Module, '_post_update', 1) of
+        true ->
+            case Module:'_pre_update'(Object) of
+                stop ->
+                    {stop, undefined};
+                {ok, Obj} ->
+                    {ok, Obj}
+            end;
+        _ ->
+            {ok, Object}
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -205,22 +245,20 @@ pre_update(Module, Object) ->
 update(Object) when is_tuple(Object) ->
     Module = element(1, Object),
     {Proceed, NewObject} = pre_update(Module, Object),
-    UpdateRes =
-        case Proceed of
-            ok ->
-                Res = from_all_backends(update, Object),
-                lists:any(fun({ok, _}) -> true; (_) -> false end, Res);
-            stop ->
-                []
-        end,
-
-    case {Proceed, erlang:function_exported(Module, '_post_update', 1)} of
-        {stop, _} ->
-            {stopped, Object};
-        {ok, true} ->
-            Module:'_post_update'(NewObject, UpdateRes);
-        _ ->
-            {ok, NewObject}
+    case Proceed of
+        ok ->
+            Res = from_all_backends(update, NewObject),
+            lists:any(fun({ok, _}) -> true; (_) -> false end, Res),
+            case post_update(Module, NewObject) of
+                {stop, _} ->
+                    {stopped, NewObject};
+                {ok, NewObject2} ->
+                    {ok, NewObject2};
+                _ ->
+                    {ok, NewObject}
+            end;
+        stop ->
+            {stopped, Object}
     end.
 
 %%--------------------------------------------------------------------
@@ -257,14 +295,18 @@ insert(Object) when is_tuple(Object) ->
             from_all_backends(save, NewObject)
     end.
 
+%% Checks if a model is valid
+is_valid_model(Model) when is_atom(Model) ->
+    undefined /= proplists:get_value(field, Model:module_info(attributes)).
+
+
 
 from_all_backends(Action, Object) ->
     _List = lists:map(
               fun({Poolname, _Arguments}) ->
-                      Worker = poolboy:checkout(Poolname),
-                      Res = gen_server:call(Worker, {Action, Object}),
-                      poolboy:checkin(Poolname, Worker),
-                      Res
+                      poolboy:transaction(Poolname, fun(Worker) ->
+                                                            gen_server:call(Worker, {Action, Object})
+                                                    end)
               end, get_backends(element(1, Object))).
 
 get_backends(Module) ->
