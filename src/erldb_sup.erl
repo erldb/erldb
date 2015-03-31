@@ -29,8 +29,8 @@ init([]) ->
     %% Start the workers
     PoolSpecs = lists:map(fun({Name, Args}) ->
 				  Type = proplists:get_value(worker, Args),
-				  SizeArgs = proplists:get_value(poolboy_config, Args),
-				  WorkerArgs = proplists:get_value(default_table_options, Args),
+				  SizeArgs = proplists:get_value(poolboy_config, Args, 10),
+				  WorkerArgs = proplists:get_value(default_table_options, Args, []),
                                   PoolArgs = [{name, {local, Name}},
                                               {worker_module, Type},
                                               {worker_args, [{db_name, Name}, {db_type, Type}|WorkerArgs]}
