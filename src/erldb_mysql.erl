@@ -88,25 +88,63 @@ handle_call({init_table, Model, _Args}, _From, State) ->
     Fields = erldb_lib:get_fields(Model),
     Res = create_table(State#state.connection, Model, Fields),
     {reply, Res, State};
-handle_call({save, Object}, _From, State) ->
+handle_call({find, Model, Conditions, Options}, _From, State) ->
+    Query = build_select_query(Model, Conditions, Options),
+    io:format("~p~n", [Query]),
+    Res =
+        case fetch(State#state.connection, Query) of
+            {data, Data} ->
+                MData = mysql:get_result_rows(Data),
+                [ list_to_tuple([Model|[ unpack_value(Y) || Y <- X ]]) || X <- MData ];
+            Error ->
+                {error, Error}
+        end,
+    {reply, Res, State};
+handle_call({Action, Object}, _From, State) when Action == save orelse Action == update ->
     Model = erlang:element(1, Object),
     Zipper = erldb_lib:unzip_object(Object),
-    {Fields, Values} =
-        lists:foldl(
-          fun({'id', 'id', _Type, _Args}, Acc) -> Acc;
-             ({'id', Val, Type, Args}, {Attrs, Vals}) -> {["id"|Attrs], [pack_value(Val, Type, Args)|Vals]};
-             ({Field, Val, Type, Args}, {Attrs, Vals}) ->
-                  {[atom_to_list(Field)|Attrs], [pack_value(Val, Type, Args)|Vals]}
-          end, {[], []}, Zipper),
 
-    SQL = ["INSERT INTO ", atom_to_list(Model), " (",
-           string:join(escape_attr(Fields), ", "),
-           ") VALUES (",
-           string:join(Values, ", ") ++
-           ")"
-          ],
+    ModelStr = atom_to_binary(Model, utf8),
+    SQL = case Action of
+              save ->
+                  {Fields, Values} =
+                      lists:foldl(
+                        fun({'id', 'id', _Type, _Args}, Acc) -> Acc;
+                           ({'id', Val, Type, Args}, {Attrs, Vals}) -> {["id"|Attrs], [pack_value(Val, Type, Args)|Vals]};
+                           ({Field, Val, Type, Args}, {Attrs, Vals}) ->
+                                {[atom_to_list(Field)|Attrs], [pack_value(Val, Type, Args)|Vals]}
+                        end, {[], []}, Zipper),
+                  FieldsStr = list_to_binary(string:join(escape_attr(Fields), ", ")),
+                  [
+                   <<"INSERT INTO ">>,
+                   ModelStr,
+                   <<" (">>,
+                   FieldsStr,
+                   <<") VALUES (">>,
+                   Values,
+                   <<")">>
+                  ];
+              update ->
+                  SetFields =
+                      lists:map(
+                        fun({'id', _, _, _}) -> "";
+                           ({Field, Val, _, _}) -> lists:concat([Field, "=", Val])
+                        end, Zipper),
+                  {value, {_, IdVal, _, _}} = lists:keysearch('id', 1, Zipper),
+                  [
+                   <<"UPDATE " >>,
+                   ModelStr,
+                   <<"SET ">>,
+                   string:join(SetFields, ", "),
+                   <<"WHERE id=">>,
+                   IdVal
+                  ]
+          end,
+    io:format("~p~n", [SQL]),
     Res = fetch(State#state.connection, SQL),
-    {reply, Res, State};
+    {reply, {ok, Res}, State};
+handle_call({supported_condition, _Conditions}, _From, State) ->
+    {reply, {ok, supported}, State};
 handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
@@ -166,39 +204,57 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 fetch(Conn, Query) ->
-    Res = mysql_conn:fetch(Conn, [Query], self()),
-    case Res of
+    case mysql_conn:fetch(Conn, [Query], self()) of
         {error, _MysqlRes} = Err ->
             Err;
-        _ -> ok
-    end,
-    Res.
+        Result ->
+            Result
+    end.
 
 create_table(Conn, TableName, TableDefinition) when is_atom(TableName) ->
     SQL = lists:flatten(["CREATE TABLE IF NOT EXISTS ", erlang:atom_to_list(TableName), " ( ", string:join(table_definition_to_sql_columns(TableDefinition), ","), " )"]),
     fetch(Conn, SQL).
 
-table_definition_to_sql_columns([]) -> [];
+build_select_query(Type, Conditions, Options) ->
+    ["SELECT * FROM ", erlang:atom_to_list(Type),
+     case Conditions of
+         [] -> "";
+         _ ->
+             " WHERE " ++ string:join(build_conditions(Conditions), " AND ")
+     end,
+     " ORDER BY ", atom_to_list(proplists:get_value(order_by, Options, id)), " ", atom_to_list(proplists:get_value(order, Options, desc)),
+     case proplists:get_value(limit, Options) of
+         undefined -> "";
+         Max -> [" LIMIT ", integer_to_list(Max)]
+     end].
+
+table_definition_to_sql_columns([]) -> "";
 table_definition_to_sql_columns([{Fieldname, _Pos, Fieldtype, Args}|Tl]) ->
-    Length = case proplists:get_value(length, Args) of
-                 Val when is_integer(Val) ->
+    Length = case {Fieldtype, proplists:get_value(length, Args)} of
+                 {_, Val} when is_integer(Val) ->
                      "(" ++ erlang:integer_to_list(Val) ++ ")";
+                 {string, undefined} ->
+                     "(256)";
                  _ ->
                      ""
              end,
     [erlang:atom_to_list(Fieldname) ++ " " ++
-     type_to_sql(Fieldtype) ++ Length ++ " " ++ options_to_sql(Args)|table_definition_to_sql_columns(Tl)].
+     type_to_sql(Fieldtype) ++ Length ++ " " ++ string:join(options_to_sql(Args), " ")|table_definition_to_sql_columns(Tl)].
 
 
 escape_attr(Attributes) ->
     [ ["`", Attribute, "`"] || Attribute <- Attributes ].
 
+build_conditions([]) -> [];
+build_conditions([{Field, 'equals', Value}|Tl]) ->
+    [atom_to_list(Field) ++ "=\"" ++ Value ++ "\""|build_conditions(Tl)].
+
 options_to_sql([]) -> [];
 options_to_sql([{length, _}|Tl]) -> options_to_sql(Tl);
 options_to_sql([{default, Value}|Tl]) when is_list(Value) ->
-    ["DEFAULT \"" ++ Value ++ "\""|options_to_sql(Tl)];
+    ["DEFAULT \"", Value, "\""|options_to_sql(Tl)];
 options_to_sql([{default, Value}|Tl]) ->
-    ["DEFAULT " ++ Value|options_to_sql(Tl)];
+    ["DEFAULT ", pack_value(Value, false, false)|options_to_sql(Tl)];
 options_to_sql([not_null|Tl]) ->
     ["NOT NULL"|options_to_sql(Tl)];
 options_to_sql([null|Tl]) ->
@@ -218,15 +274,34 @@ options_to_sql([{storage, Type}|Tl]) ->
               default ->
                   "DEFAULT"
           end,
-    ["STORAGE " ++ Res|options_to_sql(Tl)].
+    ["STORAGE ", Res|options_to_sql(Tl)].
 
+unpack_value(<<"FALSE">>) -> false;
+unpack_value(<<"TRUE">>) -> true;
+unpack_value(Int) when is_integer(Int) ->
+    Int;
+unpack_value(MaybeTerm) when is_binary(MaybeTerm) ->
+    case catch erlang:binary_to_term(MaybeTerm) of
+        {'EXIT', _} ->
+            binary_to_list(MaybeTerm);
+        Res ->
+            Res
+    end;
+unpack_value(undefined) ->
+    undefined;
+unpack_value(Atom) when is_atom(Atom) ->
+    atom_to_list(Atom);
+unpack_value(_) ->
+    throw(error).
 
 pack_value(undefined, _Type, Args) ->
     proplists:get_value(default, Args, "NULL");
+pack_value(Term, erlang_term, _Args) ->
+    term_to_binary(Term);
 pack_value(true, _Type, _Args) ->
-    "TRUE";
+    "\"TRUE\"";
 pack_value(false, _Type, _Args) ->
-    "FALSE";
+    "\"FALSE\"";
 pack_value(Value, _Type, _Args) when is_integer(Value) ->
     integer_to_list(Value);
 pack_value(Value, _Type, _Args) when is_binary(Value) ->
@@ -244,8 +319,10 @@ type_to_sql(ok) ->
     "INTEGER";
 type_to_sql(string) ->
     "VARCHAR";
+type_to_sql(erlang_term) ->
+    "BLOB";
 type_to_sql(binary) ->
-    "BINARY";
+    "BLOB";
 type_to_sql(integer) ->
     "INTEGER";
 type_to_sql(float) ->
@@ -255,4 +332,4 @@ type_to_sql(datetime) ->
 type_to_sql(timestamp) ->
     "TIMESTAMP";
 type_to_sql(boolean) ->
-    "ENUM(true,false)".
+    "ENUM(\"TRUE\",\"FALSE\")".
