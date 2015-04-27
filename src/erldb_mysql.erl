@@ -1,10 +1,11 @@
 %%%-------------------------------------------------------------------
 %%% @author Niclas Axelsson <niclas@burbas.se>
-%%% @copyright (C) 2014, Niclas Axelsson
+%%% @copyright (C) 2014-2015, Niclas Axelsson
 %%% @doc
-%%%
+%%% MySQL adapter for ErlDB
 %%% @end
 %%% Created : 23 Dec 2014 by Niclas Axelsson <niclas@burbas.se>
+%%% Updated : 4 Apr 2015 by Niclas Axelsson <niclas@burbas.se>
 %%%-------------------------------------------------------------------
 -module(erldb_mysql).
 
@@ -90,7 +91,6 @@ handle_call({init_table, Model, _Args}, _From, State) ->
     {reply, Res, State};
 handle_call({find, Model, Conditions, Options}, _From, State) ->
     Query = build_select_query(Model, Conditions, Options),
-    io:format("~p~n", [Query]),
     Res =
         case fetch(State#state.connection, Query) of
             {data, Data} ->
@@ -126,10 +126,10 @@ handle_call({Action, Object}, _From, State) when Action == save orelse Action ==
                   ];
               update ->
                   SetFields =
-                      lists:map(
-                        fun({'id', _, _, _}) -> "";
-                           ({Field, Val, _, _}) -> lists:concat([Field, "=", Val])
-                        end, Zipper),
+                      lists:foldl(
+                        fun({'id', _, _, _}, Aux) -> Aux;
+                           ({Field, Val, _, _}, Aux) -> [lists:concat(["`", Field, "`=", Val])|Aux]
+                        end, [], Zipper),
                   {value, {_, IdVal, _, _}} = lists:keysearch('id', 1, Zipper),
                   [
                    <<"UPDATE " >>,
@@ -143,8 +143,14 @@ handle_call({Action, Object}, _From, State) when Action == save orelse Action ==
     io:format("~p~n", [SQL]),
     Res = fetch(State#state.connection, SQL),
     {reply, {ok, Res}, State};
-handle_call({supported_condition, _Conditions}, _From, State) ->
+handle_call({supported_condition, Conditions}, _From, State) ->
     {reply, {ok, supported}, State};
+handle_call({supported_operation, Operation}, _From, State) ->
+    Reply = case Operation of
+                find_one -> {error, op_not_supported};
+                _ -> {ok, supported}
+            end,
+    {reply, Reply, State};
 handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
@@ -225,6 +231,7 @@ build_select_query(Type, Conditions, Options) ->
      " ORDER BY ", atom_to_list(proplists:get_value(order_by, Options, id)), " ", atom_to_list(proplists:get_value(order, Options, desc)),
      case proplists:get_value(limit, Options) of
          undefined -> "";
+         {Page, Max} -> [" LIMIT ", integer_to_list(Page), ", ", integer_to_list(Max)];
          Max -> [" LIMIT ", integer_to_list(Max)]
      end].
 
@@ -238,7 +245,7 @@ table_definition_to_sql_columns([{Fieldname, _Pos, Fieldtype, Args}|Tl]) ->
                  _ ->
                      ""
              end,
-    [erlang:atom_to_list(Fieldname) ++ " " ++
+    ["`" ++ erlang:atom_to_list(Fieldname) ++ "` " ++
      type_to_sql(Fieldtype) ++ Length ++ " " ++ string:join(options_to_sql(Args), " ")|table_definition_to_sql_columns(Tl)].
 
 
@@ -247,7 +254,7 @@ escape_attr(Attributes) ->
 
 build_conditions([]) -> [];
 build_conditions([{Field, 'equals', Value}|Tl]) ->
-    [atom_to_list(Field) ++ "=\"" ++ Value ++ "\""|build_conditions(Tl)].
+    ["`" ++ atom_to_list(Field) ++ "`=\"" ++ Value ++ "\""|build_conditions(Tl)].
 
 options_to_sql([]) -> [];
 options_to_sql([{length, _}|Tl]) -> options_to_sql(Tl);
