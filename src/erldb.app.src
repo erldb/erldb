@@ -2,15 +2,14 @@
  [
   {description, "Erlang ORM"},
   {vsn, "0.1.0"},
-  {registered, []},
+  {registered, [
+                erldb
+               ]},
   {applications, [
                   kernel,
                   stdlib
                  ]},
   {mod, { erldb_app, []}},
-  {env, [{db_pools, [{ets, [{worker, erldb_ets},
-                            {poolboy_config, [{size, 10}, {max_overflow, 20}]},
-                            {worker_options, []}]}]},
-         {default_backend, ets}
+  {env, [
         ]}
  ]}.
