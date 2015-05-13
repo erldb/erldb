@@ -143,7 +143,7 @@ handle_call({Action, Object}, _From, State) when Action == save orelse Action ==
     io:format("~p~n", [SQL]),
     Res = fetch(State#state.connection, SQL),
     {reply, {ok, Res}, State};
-handle_call({supported_condition, Conditions}, _From, State) ->
+handle_call({supported_condition, _Conditions}, _From, State) ->
     {reply, {ok, supported}, State};
 handle_call({supported_operation, Operation}, _From, State) ->
     Reply = case Operation of
