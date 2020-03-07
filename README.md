@@ -1,6 +1,6 @@
 # erldb
 
-![Erlang CI](https://github.com/erldb/erldb/workflows/Erlang%20CI/badge.svg?branch=master)
+[![Erlang CI](https://github.com/erldb/erldb/workflows/Erlang%20CI/badge.svg?branch=master)](https://github.com/erldb/erldb/actions)
 
 ORM (Object-relational mapping) application implemented in Erlang.
 
