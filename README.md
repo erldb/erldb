@@ -1,6 +1,6 @@
 # erldb
 
-[![Build Status](https://travis-ci.org/erldb/erldb.svg?branch=master)](https://travis-ci.org/erldb/erldb)
+![Erlang CI](https://github.com/erldb/erldb/workflows/Erlang%20CI/badge.svg?branch=master)
 
 ORM (Object-relational mapping) application implemented in Erlang.
 
