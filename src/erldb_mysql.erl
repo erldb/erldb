@@ -15,8 +15,14 @@
 -export([start_link/1]).
 
 %% gen_server callbacks
--export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-         terminate/2, code_change/3]).
+-export([
+         init/1,
+         handle_call/3,
+         handle_cast/2,
+         handle_info/2,
+         terminate/2,
+         code_change/3
+        ]).
 
 
 -export([
@@ -140,7 +146,6 @@ handle_call({Action, Object}, _From, State) when Action == save orelse Action ==
                    IdVal
                   ]
           end,
-    io:format("~p~n", [SQL]),
     Res = fetch(State#state.connection, SQL),
     {reply, {ok, Res}, State};
 handle_call({supported_condition, _Conditions}, _From, State) ->

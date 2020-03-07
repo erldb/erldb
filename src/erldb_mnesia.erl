@@ -93,7 +93,7 @@ code_change(_OldVsn, State, _Extra) ->
 ensure_start() ->
     mnesia:create_schema([node()]),
     case application:start(mnesia) of
-	{ok, mnesia} ->
+	ok ->
 	    ok;
 	{error, {already_started, mnesia}} ->
 	    ok;

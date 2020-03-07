@@ -36,7 +36,7 @@
 %% @doc Compiles a file
 %% @end
 %%--------------------------------------------------------------------
--spec compile(string()) -> ok.
+-spec compile(string()) -> ok | {error, Error :: atom()} | {ok, Beamfile :: binary()}.
 compile(Filename) when is_list(Filename) ->
     compile(Filename, []).
 
@@ -163,7 +163,7 @@ pre_parse([Hd|Tl], false) ->
 %% @doc Rebuilds all the functions to accept record-definition as argument.
 %% @end
 %%--------------------------------------------------------------------
--spec rebuild_functions([tuple()], atom(), [tuple()]) -> [tuple()].
+-spec rebuild_functions([tuple()], string(), [tuple()]) -> [tuple()].
 rebuild_functions([], _, _) ->
     [];
 rebuild_functions(Functions, Modelname, Fields) ->
@@ -228,7 +228,7 @@ generate_hrl_fields([{Name, Type, Args}|Tl]) ->
 %% @doc Builds relation get-functions
 %% @end
 %%--------------------------------------------------------------------
--spec build_relation_functions(CurrentModel :: atom(), [tuple()]) -> [tuple()].
+-spec build_relation_functions(CurrentModel :: string(), [tuple()]) -> [] | [tuple()].
 build_relation_functions(_, []) ->
     [];
 build_relation_functions(CurrentModel, [{has, Amount, Model}|Tl]) ->

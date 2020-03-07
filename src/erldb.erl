@@ -21,6 +21,9 @@
          create_table/1
         ]).
 
+-type model() :: tuple().
+-export_type([model/0]).
+
 %%--------------------------------------------------------------------
 %% @doc Starts the erldb application
 %%
@@ -171,13 +174,11 @@ save(Object) when is_tuple(Object) ->
             case insert(Object) of
                 {stopped, Obj} ->
                     {stopped, Obj};
-                {ok, Res} ->
+                Res ->
                     [{Poolname, _Args}|_] = get_backends(Module),
                     poolboy:transaction(Poolname, fun(Worker) ->
                                                           gen_server:call(Worker, {save, Res})
-                                                  end);
-                Res ->
-                    io:format("~p~n", [Res])
+                                                  end)
             end;
         _Value ->
             update(Object)
@@ -253,9 +254,7 @@ update(Object) when is_tuple(Object) ->
                 {stop, _} ->
                     {stopped, NewObject};
                 {ok, NewObject2} ->
-                    {ok, NewObject2};
-                _ ->
-                    {ok, NewObject}
+                    {ok, NewObject2}
             end;
         stop ->
             {stopped, Object}
@@ -265,7 +264,7 @@ update(Object) when is_tuple(Object) ->
 %% @doc Performs an insert operation for an object
 %% @end
 %%--------------------------------------------------------------------
--spec insert(tuple()) -> {ok, tuple()} | {stopped, tuple()} | {error, atom()}.
+-spec insert(tuple()) -> {stopped, tuple()} | [any()].
 insert(Object) when is_tuple(Object) ->
     Module = element(1, Object),
     {Proceed, NewObject} =
@@ -296,11 +295,12 @@ insert(Object) when is_tuple(Object) ->
     end.
 
 %% Checks if a model is valid
+-spec is_valid_model(atom()) -> boolean().
 is_valid_model(Model) when is_atom(Model) ->
     undefined /= proplists:get_value(field, Model:module_info(attributes)).
 
 
-
+-spec from_all_backends(save | delete | update, tuple()) -> [any()].
 from_all_backends(Action, Object) ->
     _List = lists:map(
               fun({Poolname, _Arguments}) ->
