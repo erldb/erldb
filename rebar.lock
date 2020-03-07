@@ -1,0 +1,10 @@
+{"1.1.0",
+[{<<"dh_date">>,{pkg,<<"dh_date">>,<<"1.0.0">>},0},
+ {<<"mysql">>,{pkg,<<"mysql">>,<<"1.6.0">>},0},
+ {<<"poolboy">>,{pkg,<<"poolboy">>,<<"1.5.2">>},0}]}.
+[
+{pkg_hash,[
+ {<<"dh_date">>, <<"5B0C286665E160DE44132552931BEF06B5CB2244D5BD20E333A686E9D8BF92E3">>},
+ {<<"mysql">>, <<"F7858A8BAB3DEB21684161F3A557DFC9698B1E212DCFCD182F89F93AEA740431">>},
+ {<<"poolboy">>, <<"392B007A1693A64540CEAD79830443ABF5762F5D30CF50BC95CB2C1AAAFA006B">>}]}
+].
