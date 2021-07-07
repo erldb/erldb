@@ -8,7 +8,7 @@
 %%%-------------------------------------------------------------------
 -module(erldb).
 -export([
-         init_table/1,
+         get_all_models/0,
          start/1,
          stop/0,
          find/2,
@@ -20,6 +20,8 @@
          save/1,
          create_table/1
         ]).
+
+-include_lib("erldb/include/erldb.hrl").
 
 -type model() :: tuple().
 -export_type([model/0]).
@@ -40,12 +42,9 @@ start(_Args) ->
 stop() ->
     application:stop(erldb).
 
-
-init_table(Model) ->
-    [{Poolname, _Args}|_] = get_backends(Model),
-    poolboy:transaction(Poolname, fun(Worker) ->
-                                          gen_server:call(Worker, {init_table, Model, []})
-                                  end).
+get_all_models() ->
+    Modules = erlang:loaded(),
+    [ X || X <- Modules, proplists:lookup(backend, X:module_info(attributes)) /= none ].
 
 %%--------------------------------------------------------------------
 %% @doc Searches for models with the given conditions
@@ -59,15 +58,14 @@ find(Model, Conditions) ->
 find(Model, Conditions, Options) ->
     [{Poolname, _Args}|_] = get_backends(Model),
     NConditions = normalize_conditions(Conditions),
-    poolboy:transaction(Poolname, fun(Worker) ->
-                                          case gen_server:call(Worker, {supported_condition, NConditions}) of
-                                              {ok, supported} ->
-                                                  gen_server:call(Worker, {find, Model, NConditions, Options});
-                                              {error, not_supported, Operator} ->
-                                                  io:format("'~p' does not support query operator: ~p~n", [Model, Operator]),
-                                                  {error, op_not_supported}
-                                          end
-                                  end).
+    {ok, Worker} = erldb_sup:get_worker(Poolname),
+    case gen_server:call(Worker, {supported_condition, NConditions}) of
+        {ok, supported} ->
+            gen_server:call(Worker, {find, Model, NConditions, Options});
+        {error, not_supported, Operator} ->
+            ?WARNING("'~p' does not support query operator: ~p", [Model, Operator]),
+            {error, op_not_supported}
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -81,27 +79,25 @@ find_one(Model, Conditions) ->
 -spec find_one(atom(), [tuple()], [tuple()]) -> tuple() | not_found.
 find_one(Model, Conditions, Options) ->
     [{Poolname, _Args}|_] = get_backends(Model),
-    poolboy:transaction(Poolname, fun(Worker) ->
-                                          case gen_server:call(Worker, {supported_operation, find_one}) of
-                                              {error, op_not_supported} ->
-                                                  case find(Model, Conditions, Options) of
-                                                      {ok, [E|_]} ->
-                                                          E;
-                                                      _ ->
-                                                          not_found
-                                                  end;
-                                              {ok, supported} ->
-                                                  gen_server:call(Worker, {find_one, Model, Conditions, Options})
-                                          end
-                                  end).
+    {ok, Worker} = erldb_sup:get_worker(Poolname),
+    case gen_server:call(Worker, {supported_operation, find_one}) of
+        {error, op_not_supported} ->
+            case find(Model, Conditions, Options) of
+                {ok, [E|_]} ->
+                    E;
+                _ ->
+                    not_found
+            end;
+        {ok, supported} ->
+            gen_server:call(Worker, {find_one, Model, Conditions, Options})
+    end.
 
 create_table(Model) when is_atom(Model) ->
     case is_valid_model(Model) of
         true ->
             [{Poolname, _Args}|_] = get_backends(Model),
-            poolboy:transaction(Poolname, fun(Worker) ->
-                                                  gen_server:call(Worker, {init_table, Model, []})
-                                          end);
+            {ok, Worker} = erldb_sup:get_worker(Poolname),
+            gen_server:call(Worker, {init_table, Model, []});
         _Args ->
             {error, invalid_model}
     end.
@@ -175,14 +171,14 @@ save(Object) when is_tuple(Object) ->
                 {stopped, Obj} ->
                     {stopped, Obj};
                 Res ->
-                    [{Poolname, _Args}|_] = get_backends(Module),
-                    poolboy:transaction(Poolname, fun(Worker) ->
-                                                          gen_server:call(Worker, {save, Res})
-                                                  end)
+                    Res
             end;
         _Value ->
             update(Object)
-    end.
+    end;
+save(Objects) ->
+    [ save(Object) || Object <- Objects ].
+
 
 primary_key_pos([]) ->
     {error, not_found};
@@ -302,12 +298,11 @@ is_valid_model(Model) when is_atom(Model) ->
 
 -spec from_all_backends(save | delete | update, tuple()) -> [any()].
 from_all_backends(Action, Object) ->
-    _List = lists:map(
-              fun({Poolname, _Arguments}) ->
-                      poolboy:transaction(Poolname, fun(Worker) ->
-                                                            gen_server:call(Worker, {Action, Object})
-                                                    end)
-              end, get_backends(element(1, Object))).
+    lists:map(
+      fun({Poolname, _Arguments}) ->
+              {ok, Worker} = erldb_sup:get_worker(Poolname),
+              gen_server:call(Worker, {Action, Object})
+      end, get_backends(element(1, Object))).
 
 get_backends(Module) ->
     case proplists:get_value(backend, Module:module_info(attributes)) of

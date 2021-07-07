@@ -1,10 +1,18 @@
-{"1.1.0",
+{"1.2.0",
 [{<<"dh_date">>,{pkg,<<"dh_date">>,<<"1.0.0">>},0},
  {<<"mysql">>,{pkg,<<"mysql">>,<<"1.6.0">>},0},
+ {<<"pmod_transform">>,
+  {git,"https://github.com/erlang/pmod_transform.git",
+       {ref,"f96b8b572395581d58fe3dd7c3e61f3f0e8fa6dc"}},
+  0},
  {<<"poolboy">>,{pkg,<<"poolboy">>,<<"1.5.2">>},0}]}.
 [
 {pkg_hash,[
  {<<"dh_date">>, <<"5B0C286665E160DE44132552931BEF06B5CB2244D5BD20E333A686E9D8BF92E3">>},
  {<<"mysql">>, <<"F7858A8BAB3DEB21684161F3A557DFC9698B1E212DCFCD182F89F93AEA740431">>},
- {<<"poolboy">>, <<"392B007A1693A64540CEAD79830443ABF5762F5D30CF50BC95CB2C1AAAFA006B">>}]}
+ {<<"poolboy">>, <<"392B007A1693A64540CEAD79830443ABF5762F5D30CF50BC95CB2C1AAAFA006B">>}]},
+{pkg_hash_ext,[
+ {<<"dh_date">>, <<"3F5D908383A0243A693147EA85A5654769B90078AC999A076ED6F0917F7614CF">>},
+ {<<"mysql">>, <<"0B7B72927F99EB89E5AC2DAA5DB05DAAC6FDE99FDEA33B02406913A617F4A1A7">>},
+ {<<"poolboy">>, <<"DAD79704CE5440F3D5A3681C8590B9DC25D1A561E8F5A9C995281012860901E3">>}]}
 ].

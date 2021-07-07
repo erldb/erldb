@@ -35,8 +35,7 @@
 %% @end
 %%--------------------------------------------------------------------
 start_link(Args) ->
-    WorkerArgs = proplists:get_value(worker_args, Args, []),
-    gen_server:start_link(?MODULE, WorkerArgs, []).
+    gen_server:start_link(?MODULE, Args, []).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -53,7 +52,8 @@ start_link(Args) ->
 %%                     {stop, Reason}
 %% @end
 %%--------------------------------------------------------------------
-init(_Args) ->
+init(Args) ->
+    [ gen_server:cast(self(), {init_table, Model, []}) || Model <- proplists:get_value(models, Args, []) ],
     {ok, #state{}}.
 
 %%--------------------------------------------------------------------
@@ -70,16 +70,6 @@ init(_Args) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call({init_table, Model, Args}, _From, State) ->
-    Options = proplists:get_value(worker_options, Args, []),
-
-    Fields = get_fields(Model),
-    [PrimaryKeyPos|_] = [ Pos || {_Fieldname, Pos, _Type, Opt} <- Fields,
-                                proplists:get_value(primary_key, Opt) /= undefined ],
-
-    Result = ets:new(Model, [named_table, public, {keypos, PrimaryKeyPos}|Options]),
-    {reply, {ok, Result}, State};
-
 handle_call({save, Object}, _From, State) ->
     Model = element(1, Object),
     Fields = get_fields(Model),
@@ -163,6 +153,15 @@ handle_call(_Request, _From, State) ->
 %%                                  {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
+handle_cast({init_table, Model, Args}, State) ->
+    Options = proplists:get_value(worker_options, Args, []),
+
+    Fields = get_fields(Model),
+    [PrimaryKeyPos|_] = [ Pos || {_Fieldname, Pos, _Type, Opt} <- Fields,
+                                proplists:get_value(primary_key, Opt) /= undefined ],
+
+    ets:new(Model, [named_table, public, {keypos, PrimaryKeyPos}|Options]),
+    {noreply, State};
 handle_cast(_Msg, State) ->
     {noreply, State}.
 

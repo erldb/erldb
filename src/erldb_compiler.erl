@@ -279,6 +279,9 @@ generate_beam(#compiler_state{outdir = OutDir,
          %% -compile(export_all).
          erl_syntax:attribute(erl_syntax:atom(compile), [erl_syntax:atom("export_all")]),
 
+         %% -include_lib("erldb/include/erldb.hrl").
+         erl_syntax:attribute(erl_syntax:atom(include_lib), [erl_syntax:string("erldb/include/erldb.hrl")]),
+
          %% Record definition
          RecordDefinition
         ] ++ Attributes ++ [
