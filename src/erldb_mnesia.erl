@@ -89,7 +89,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
--spec ensure_start() -> ok | {error, Reaon :: term()}.
+-spec ensure_start() -> ok | {error, Reason :: term()}.
 ensure_start() ->
     mnesia:create_schema([node()]),
     case application:start(mnesia) of
