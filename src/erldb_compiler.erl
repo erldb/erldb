@@ -15,7 +15,6 @@
 
 -record(model_state, {
                       name = "" :: string(),
-                      backends = [] :: [tuple()],
                       fields = [] :: [tuple()],
                       attributes = [] :: [tuple()],
                       body = [] :: [tuple()],
@@ -57,10 +56,10 @@ compile_repos([#{adapter := Adapter, module := Module}|Tl]) ->
            erl_syntax:atom("__configuration__"),
            [erl_syntax:clause(
               [], none, [
-                                                     erl_syntax:application(
-                                                       erl_syntax:atom(Repo),
-                                                       erl_syntax:atom(insert),
-                                                       [ erl_syntax:variable("Model"), erl_syntax:map_expr([])])])]),
+                         erl_syntax:application(
+                           erl_syntax:atom(Repo),
+                           erl_syntax:atom(insert),
+                           [ erl_syntax:variable("Model"), erl_syntax:map_expr([])])])]),
 
          %% insert(Model, Options) -> Adapter:insert(Module, Options)
          erl_syntax:function(
@@ -152,10 +151,6 @@ post_parse({attribute, R0, field, {Name, Type, Arguments}}, State = #model_state
                                                                        fc = FC}) ->
     A = {attribute, R0, field, {Name, FC, Type, Arguments}},
     State#model_state{fields = [{Name, Type, Arguments}|Fields], attributes = [A|Attributes], fc = FC-1};
-post_parse(A = {attribute, _R0, backend, {NamedBackend, Arguments}}, State = #model_state{
-                                                                                attributes = Attributes,
-                                                                                backends = Backends}) ->
-    State#model_state{backends = [{NamedBackend, Arguments}|Backends], attributes = [A|Attributes]};
 post_parse({attribute, R0, relation, {belongs_to, Model}}, State = #model_state{
                                                                       fields = Fields,
                                                                       fc = FC,
