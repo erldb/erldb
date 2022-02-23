@@ -7,10 +7,7 @@
 -module(erldb_compiler).
 
 -export([
-         compile_repo/1,
-
-         compile/1,
-         compile/2
+         parse_transform/2
         ]).
 
 -record(model_state, {
@@ -24,119 +21,15 @@
 
 -define(INDENT_WS, "    ").
 
--type options() :: #{outdir := list(),
-                     includedir := list(),
-                     model_state := #model_state{}}.
-
-
--spec compile_repo(App :: atom()) -> {ok, Modulename :: binary()} | {error, Reason :: any()}.
-compile_repo(App) ->
-    case application:get_env(App, erldb_repos, []) of
-        [] ->
-            logger:error("erldb could not find any repositories configured. Please check your sys.config file and add the missing information"),
-            {error, missing_configuration};
-        Repos ->
-            compile_repos(Repos)
-    end.
-
-
-
-compile_repos([#{adapter := Adapter, module := Module}|Tl]) ->
-    %% The repos is basically just a datastructure that needs to compile into an erlang module
-    AST =
-        [
-         %% -module(Name).
-         erl_syntax:attribute(erl_syntax:atom(module),
-                              [erl_syntax:atom(Repo)]),
-         %% -compile(export_all).
-         erl_syntax:attribute(erl_syntax:atom(compile), [erl_syntax:atom("export_all")]),
-
-         %% insert(Model) -> Repo:insert(Model, #{}).
-         erl_syntax:function(
-           erl_syntax:atom("__configuration__"),
-           [erl_syntax:clause(
-              [], none, [
-                         erl_syntax:application(
-                           erl_syntax:atom(Repo),
-                           erl_syntax:atom(insert),
-                           [ erl_syntax:variable("Model"), erl_syntax:map_expr([])])])]),
-
-         %% insert(Model, Options) -> Adapter:insert(Module, Options)
-         erl_syntax:function(
-           erl_syntax:atom("insert"),
-           [erl_syntax:clause(
-              [erl_syntax:variable("Model"), erl_syntax:variable("Options")], none, [
-                                                                                     erl_syntax:application(
-                                                                                       erl_syntax:atom(Adapter),
-                                                                                       erl_syntax:atom(insert),
-                                                                                       [erl_syntax:variable("Model"),
-                                                                                        erl_syntax:variable("Options")])
-                                                                                    ])])
-        ],
-    Forms = [ erl_syntax:revert(Form) || Form <- AST ],
-    case compile:forms(Forms, [report_errors]) of
-        {ok, ModuleName, Binary} ->
-            logger:info("Compiled repo ~s", [ModuleName]),
-            BeamFile = io_lib:format("~s.beam", [ModuleName]),
-            ok = file:write_file(filename:join(OutDir, BeamFile), Binary),
-            {ok, ModuleName};
-        Error ->
-            logger:error("Could not compile repo ~s, reason: ~p", [Repo, Error]),
-            {error, Error}
-    end.
-
-%%--------------------------------------------------------------------
-%% @doc Compiles a file
-%% @end
-%%--------------------------------------------------------------------
--spec compile(string()) -> ok | {error, Error :: atom()} | {ok, Beamfile :: binary()}.
-compile(Filename) when is_list(Filename) ->
-    compile(Filename, #{}).
-
 %%--------------------------------------------------------------------
 %% @doc Compiles a file with additional options.
 %% Options :: #{outdir := Path,
 %%              includedir := Path}
 %% @end
 %%--------------------------------------------------------------------
--spec compile(Filename :: string(), Options :: options()) -> {ok, Beamfile :: binary()} | ok | {error, Error :: atom()}.
-compile(Filename, Options) ->
-    %% Extract the modelname
-    Modelname = filename:rootname(filename:basename(Filename)),
-
-    %% Build the state
-    CompilerState = #{outdir => maps:get(outdir, Options, "./ebin"),
-                      includedir => maps:get(includedir, Options, "./include"),
-                      model_state => #model_state{name = Modelname}},
-
-    case file:read_file(Filename) of
-        {ok, BinStr} ->
-            {ok, Tokens, _EndLocation} = erl_scan:string(binary_to_list(BinStr)),
-            Forms = split_on_dot(pre_parse(Tokens, false), [], []),
-            ParsedForms = [ element(2, erl_parse:parse(X)) || X <- Forms ],
-
-            NFields = lists:foldl(
-                        fun({attribute, _, field, _}, Acc) -> 1+Acc;
-                           (_, Acc) -> Acc
-                        end, 2, ParsedForms),
-
-            ModelState1 = maps:get(model_state, CompilerState),
-
-            ModelState2 = lists:foldl(fun(X, State) -> post_parse(X, State) end,
-                                      ModelState1#model_state{fc = NFields-1}, ParsedForms),
-
-            Hrl = io_lib:format("-record(~s, {~n~s~n}).", [Modelname, generate_hrl_fields(ModelState2.model_state.fields)]),
-
-            TypeDefinition = io_lib:format("~n-type ~s_model() :: #~s{}.", [Modelname, Modelname]),
-
-            {ok, GenHrl} = erl_parse:parse(element(2, erl_scan:string(Hrl))),
-
-            %% Save the HRL-file
-            ok = file:write_file(filename:join([IncludeDir, Modelname++".hrl"]), Hrl ++ TypeDefinition),
-            generate_beam(CompilerState#compiler_state{model_state = ModelState2}, GenHrl);
-        Error ->
-            Error
-    end.
+-spec parse_transform(Form :: [tuple()], Options :: list()) -> {ok, Beamfile :: binary()} | ok | {error, Error :: atom()}.
+compile(Form, _Options) ->
+    Form.
 
 %%--------------------------------------------------------------------
 %% @doc Divides all the forms into lists grouped by type.

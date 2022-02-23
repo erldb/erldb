@@ -3,9 +3,12 @@
 %%% Example of a author-model used in erldb
 %%% @end
 %%% Created : 15 Aug 2014 by Niclas Axelsson <niclas@burbas.se>
--backend(ets, []).
--relation(has, many, tags).
+-compile({parse_transform, erldb_compiler}).
 
--field(id, integer, [primary_key, auto_increment]).
--field(name, string, [{default, "John Doe"}]).
--field(callsign, string).
+-table(#{name => "my_table",
+         columns => [
+                     {id, integer, [auto_increment]},
+                     {username, string, [{length, 10}]},
+                     {password, string, [{length, 10}]}
+                    ]
+        }).
