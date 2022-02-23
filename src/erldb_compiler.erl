@@ -1,36 +1,90 @@
 %%%-------------------------------------------------------------------
-%%% @author Niclas Axelsson <niclas@burbasconsulting.se> [http://www.burbasconsulting.com]
-%%% @copyright (C) 2013-2014, Niclas Axelsson
+%%% @author Niclas Axelsson <niclas@burbas.se> [http://www.novaframework.org]
 %%% @doc
 %%% Simple compiler for erldb models
 %%% @end
-%%% Created : 13 Dec 2013 by Niclas Axelsson
 %%%-------------------------------------------------------------------
 -module(erldb_compiler).
 
 -export([
+         compile_repo/1,
+
          compile/1,
          compile/2
         ]).
 
 -record(model_state, {
-          name = "" :: string(),
-          backends = [] :: [tuple()],
-          fields = [] :: [tuple()],
-          attributes = [] :: [tuple()],
-          body = [] :: [tuple()],
-          relations = [] :: [tuple()],
-          fc = 1 :: integer() %% Field counter. Starts on 1 since 1 contains the record-name
-         }).
+                      name = "" :: string(),
+                      backends = [] :: [tuple()],
+                      fields = [] :: [tuple()],
+                      attributes = [] :: [tuple()],
+                      body = [] :: [tuple()],
+                      relations = [] :: [tuple()],
+                      fc = 1 :: integer() %% Field counter. Starts on 1 since 1 contains the record-name
+                     }).
 
--record(compiler_state, {
-          outdir = "" :: string(),
-          includedir = "" :: string(),
-          model_state :: #model_state{}
-         }).
+-define(INDENT_WS, "    ").
 
--define(INDENT_WHITESPACE, "    ").
+-type options() :: #{outdir := list(),
+                     includedir := list(),
+                     model_state := #model_state{}}.
 
+
+-spec compile_repo(App :: atom()) -> {ok, Modulename :: binary()} | {error, Reason :: any()}.
+compile_repo(App) ->
+    case application:get_env(App, erldb_repos, []) of
+        [] ->
+            logger:error("erldb could not find any repositories configured. Please check your sys.config file and add the missing information"),
+            {error, missing_configuration};
+        Repos ->
+            compile_repos(Repos)
+    end.
+
+
+
+compile_repos([#{adapter := Adapter, module := Module}|Tl]) ->
+    %% The repos is basically just a datastructure that needs to compile into an erlang module
+    AST =
+        [
+         %% -module(Name).
+         erl_syntax:attribute(erl_syntax:atom(module),
+                              [erl_syntax:atom(Repo)]),
+         %% -compile(export_all).
+         erl_syntax:attribute(erl_syntax:atom(compile), [erl_syntax:atom("export_all")]),
+
+         %% insert(Model) -> Repo:insert(Model, #{}).
+         erl_syntax:function(
+           erl_syntax:atom("__configuration__"),
+           [erl_syntax:clause(
+              [], none, [
+                                                     erl_syntax:application(
+                                                       erl_syntax:atom(Repo),
+                                                       erl_syntax:atom(insert),
+                                                       [ erl_syntax:variable("Model"), erl_syntax:map_expr([])])])]),
+
+         %% insert(Model, Options) -> Adapter:insert(Module, Options)
+         erl_syntax:function(
+           erl_syntax:atom("insert"),
+           [erl_syntax:clause(
+              [erl_syntax:variable("Model"), erl_syntax:variable("Options")], none, [
+                                                                                     erl_syntax:application(
+                                                                                       erl_syntax:atom(Adapter),
+                                                                                       erl_syntax:atom(insert),
+                                                                                       [erl_syntax:variable("Model"),
+                                                                                        erl_syntax:variable("Options")])
+                                                                                    ])])
+        ],
+    Forms = [ erl_syntax:revert(Form) || Form <- AST ],
+    case compile:forms(Forms, [report_errors]) of
+        {ok, ModuleName, Binary} ->
+            logger:info("Compiled repo ~s", [ModuleName]),
+            BeamFile = io_lib:format("~s.beam", [ModuleName]),
+            ok = file:write_file(filename:join(OutDir, BeamFile), Binary),
+            {ok, ModuleName};
+        Error ->
+            logger:error("Could not compile repo ~s, reason: ~p", [Repo, Error]),
+            {error, Error}
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc Compiles a file
@@ -38,26 +92,24 @@
 %%--------------------------------------------------------------------
 -spec compile(string()) -> ok | {error, Error :: atom()} | {ok, Beamfile :: binary()}.
 compile(Filename) when is_list(Filename) ->
-    compile(Filename, []).
+    compile(Filename, #{}).
 
 %%--------------------------------------------------------------------
 %% @doc Compiles a file with additional options.
-%% Options :: [Option]
-%% Option = {outdir, Path} |
-%%          {includedir, Path}
+%% Options :: #{outdir := Path,
+%%              includedir := Path}
 %% @end
 %%--------------------------------------------------------------------
--spec compile(Filename :: string(), Options :: [tuple()]) -> {ok, Beamfile :: binary()} | ok | {error, Error :: atom()}.
+-spec compile(Filename :: string(), Options :: options()) -> {ok, Beamfile :: binary()} | ok | {error, Error :: atom()}.
 compile(Filename, Options) ->
-    %% Extract the filename
+    %% Extract the modelname
     Modelname = filename:rootname(filename:basename(Filename)),
-    do_compile(Filename, #compiler_state{outdir = proplists:get_value(outdir, Options, "./ebin"),
-                                         includedir = proplists:get_value(includedir, Options, "./include"),
-                                         model_state = #model_state {name = Modelname}}).
 
+    %% Build the state
+    CompilerState = #{outdir => maps:get(outdir, Options, "./ebin"),
+                      includedir => maps:get(includedir, Options, "./include"),
+                      model_state => #model_state{name = Modelname}},
 
-do_compile(Filename, CompilerState = #compiler_state{includedir = IncludeDir,
-                                                     model_state = #model_state{name = Modelname}}) ->
     case file:read_file(Filename) of
         {ok, BinStr} ->
             {ok, Tokens, _EndLocation} = erl_scan:string(binary_to_list(BinStr)),
@@ -69,10 +121,15 @@ do_compile(Filename, CompilerState = #compiler_state{includedir = IncludeDir,
                            (_, Acc) -> Acc
                         end, 2, ParsedForms),
 
+            ModelState1 = maps:get(model_state, CompilerState),
+
             ModelState2 = lists:foldl(fun(X, State) -> post_parse(X, State) end,
-                                      CompilerState#compiler_state.model_state#model_state{fc = NFields-1}, ParsedForms),
-            Hrl = generate_hrl(list_to_atom(Modelname), ModelState2#model_state.fields),
-            TypeDefinition = lists:concat(["\n-type ", Modelname, "_model() :: #", Modelname, "{}."]),
+                                      ModelState1#model_state{fc = NFields-1}, ParsedForms),
+
+            Hrl = io_lib:format("-record(~s, {~n~s~n}).", [Modelname, generate_hrl_fields(ModelState2.model_state.fields)]),
+
+            TypeDefinition = io_lib:format("~n-type ~s_model() :: #~s{}.", [Modelname, Modelname]),
+
             {ok, GenHrl} = erl_parse:parse(element(2, erl_scan:string(Hrl))),
 
             %% Save the HRL-file
@@ -90,20 +147,20 @@ do_compile(Filename, CompilerState = #compiler_state{includedir = IncludeDir,
 post_parse({attribute, R0, field, {Name, Type}}, State) ->
     post_parse({attribute, R0, field, {Name, Type, []}}, State);
 post_parse({attribute, R0, field, {Name, Type, Arguments}}, State = #model_state{
-                                                              attributes = Attributes,
-                                                              fields = Fields,
-                                                              fc = FC}) ->
+                                                                       attributes = Attributes,
+                                                                       fields = Fields,
+                                                                       fc = FC}) ->
     A = {attribute, R0, field, {Name, FC, Type, Arguments}},
     State#model_state{fields = [{Name, Type, Arguments}|Fields], attributes = [A|Attributes], fc = FC-1};
 post_parse(A = {attribute, _R0, backend, {NamedBackend, Arguments}}, State = #model_state{
-                                                                       attributes = Attributes,
-                                                                       backends = Backends}) ->
+                                                                                attributes = Attributes,
+                                                                                backends = Backends}) ->
     State#model_state{backends = [{NamedBackend, Arguments}|Backends], attributes = [A|Attributes]};
 post_parse({attribute, R0, relation, {belongs_to, Model}}, State = #model_state{
-                                                             fields = Fields,
-                                                             fc = FC,
-                                                             attributes = Attributes,
-                                                             relations = Relations}) ->
+                                                                      fields = Fields,
+                                                                      fc = FC,
+                                                                      attributes = Attributes,
+                                                                      relations = Relations}) ->
     %% We need to define a new attribute which contains the primary key of the other model.
     %% This is a bit tricky since we need to check which field is the primary one.
     PrimaryKey =
@@ -116,14 +173,14 @@ post_parse({attribute, R0, relation, {belongs_to, Model}}, State = #model_state{
                 %% Get the primary key type
                 ok
         end,
-    Fieldname = erlang:list_to_atom(lists:concat([erlang:atom_to_list(Model), "_id"])),
+    Fieldname = erlang:list_to_atom(io_lib:format("~s_id", [Model])),
     A = {attribute, R0, field, {Fieldname, FC, PrimaryKey, []}},
     State#model_state{fields = [{Fieldname, PrimaryKey, []}|Fields],
                       attributes = [A|Attributes],
                       fc = FC-1,
                       relations = [{belongs_to, Model}|Relations]};
 post_parse({attribute, _R0, relation, {has, Amount, Model}}, State = #model_state{
-                                                               relations = Relations}) ->
+                                                                        relations = Relations}) ->
     %% This model is linked to 'Amount' numbers of rows within another model
     %% TODO: check which field is the primary_key
     State#model_state{relations = [{has, Amount, Model}|Relations]};
@@ -142,20 +199,6 @@ pre_parse([{')', L0} = T0|Tl], {true, Attr}) ->
     lists:reverse([T0, {'}', L0}|Attr]) ++ pre_parse(Tl, false);
 pre_parse([Hd|Tl], {true, Attr}) ->
     pre_parse(Tl, {true, [Hd|Attr]});
-pre_parse([{var, R0, Name} = T0|Tl], false) ->
-    case Name of
-        Hook when Hook == '_pre_update' orelse
-                  Hook == '_post_update' orelse
-                  Hook == '_pre_lookup' orelse
-                  Hook == '_post_lookup' orelse
-                  Hook == '_pre_delete' orelse
-                  Hook == '_post_delete' orelse
-                  Hook == '_pre_insert' orelse
-                  Hook == '_post_insert' ->
-            [{atom, R0, Name}|pre_parse(Tl, false)];
-        _ ->
-            [T0|pre_parse(Tl, false)]
-    end;
 pre_parse([Hd|Tl], false) ->
     [Hd|pre_parse(Tl, false)].
 
@@ -196,11 +239,8 @@ rebuild_function(Other, _) ->
 %%--------------------------------------------------------------------
 -spec generate_hrl(atom(), [{atom(), atom(), [{atom(), any()}|atom()]}]) -> string().
 generate_hrl(Modelname, Fields) ->
-    lists:concat(["-record(",
-                  Modelname,
-                  ", {\n",
-                  generate_hrl_fields(Fields),
-                  "})."]).
+    io_lib:format("-record(~s, {~n~s~n}).", [Modelname, generate_hrl_fields(Fields)]).
+
 
 -spec generate_hrl_fields([{atom(), atom(), [tuple()]}]) -> string().
 generate_hrl_fields([]) -> [];
@@ -210,18 +250,18 @@ generate_hrl_fields([{Name, Type, Args}|Tl]) ->
             undefined ->
                 case proplists:get_value(primary_key, Args) of
                     undefined ->
-                        lists:concat([?INDENT_WHITESPACE, Name, " ::  undefined | ", convert_to_erl_type(Type)]);
+                        io_lib:format("~s~s :: undefined | ~s", [?INDENT_WS, Name, convert_to_erl_type(Type)]);
                     _ ->
-                        lists:concat([?INDENT_WHITESPACE, Name, " = id :: id | ", convert_to_erl_type(Type)])
+                        io_lib:format("~s~s = id :: id | ~s", [?INDENT_WS, Name, convert_to_erl_type(Type)])
                 end;
             DefaultValue ->
-                lists:concat([?INDENT_WHITESPACE, Name, " = \"", DefaultValue, "\" :: ", convert_to_erl_type(Type)])
+                io_lib:format("~s~s = \"~s\" :: ~s", [?INDENT_WS, Name, DefaultValue, convert_to_erl_type(Type)])
         end,
     case length(Tl) of
         0 ->
-            Res ++ "\n" ++ generate_hrl_fields(Tl);
+            io_lib:format("~s~n~s", [Res, generate_hrl_fields(Tl)]);
         _ ->
-            Res ++ ",\n" ++ generate_hrl_fields(Tl)
+            io_lib:format("~s,~n~s", [Res, generate_hrl_fields(Tl)])
     end.
 
 %%--------------------------------------------------------------------
@@ -238,20 +278,20 @@ build_relation_functions(CurrentModel, [{has, Amount, Model}|Tl]) ->
                end,
     %% Generates function: FuncName(Model) -> erldb:find(Model, [{CurrentModel_id, Model#CurrentModel.id}]).
     [erl_syntax:function(
-      erl_syntax:atom(FuncName),
-      [erl_syntax:clause(
-         [erl_syntax:variable("Model")], none, [erl_syntax:application(
-                                                  erl_syntax:atom(erldb),
-                                                  erl_syntax:atom(find),
-                                                  [ erl_syntax:atom(Model),
-                                                    erl_syntax:list([
-                                                                     erl_syntax:tuple([
-                                                                                       erl_syntax:atom(lists:concat([CurrentModel, "_id"])),
-                                                                                       erl_syntax:record_access(erl_syntax:variable("Model"),
-                                                                                                                erl_syntax:atom(CurrentModel),
-                                                                                                                erl_syntax:atom("id"))
-                                                                                      ])])
-                                                    ])])])|build_relation_functions(CurrentModel, Tl)];
+       erl_syntax:atom(FuncName),
+       [erl_syntax:clause(
+          [erl_syntax:variable("Model")], none, [erl_syntax:application(
+                                                   erl_syntax:atom(erldb),
+                                                   erl_syntax:atom(find),
+                                                   [ erl_syntax:atom(Model),
+                                                     erl_syntax:list([
+                                                                      erl_syntax:tuple([
+                                                                                        erl_syntax:atom(io_lib:format("~s_id", [CurrentModel])),
+                                                                                        erl_syntax:record_access(erl_syntax:variable("Model"),
+                                                                                                                 erl_syntax:atom(CurrentModel),
+                                                                                                                 erl_syntax:atom("id"))
+                                                                                       ])])
+                                                   ])])])|build_relation_functions(CurrentModel, Tl)];
 build_relation_functions(CurrentModel, [_|Tl]) ->
     build_relation_functions(CurrentModel, Tl).
 
@@ -262,11 +302,11 @@ build_relation_functions(CurrentModel, [_|Tl]) ->
 -spec generate_beam(#compiler_state{}, RecordDefinition :: [tuple()]) -> {ok, Beamfile :: binary()} | ok.
 generate_beam(#compiler_state{outdir = OutDir,
                               model_state = #model_state{
-                                name = Name,
-                                fields = Fields,
-                                attributes = Attributes,
-                                relations = Relations,
-                                body = Body}},
+                                               name = Name,
+                                               fields = Fields,
+                                               attributes = Attributes,
+                                               relations = Relations,
+                                               body = Body}},
               RecordDefinition) ->
     RelationFunctions = build_relation_functions(Name, Relations),
     Functions = rebuild_functions(Body, Name, Fields),
@@ -286,35 +326,35 @@ generate_beam(#compiler_state{outdir = OutDir,
          RecordDefinition
         ] ++ Attributes ++ [
 
-         %% Save function
-         erl_syntax:function(
-           erl_syntax:atom("save"),
-           [erl_syntax:clause(
-              [erl_syntax:variable("Model")], none, [erl_syntax:application(
-                                                       erl_syntax:atom(erldb),
-                                                       erl_syntax:atom(save),
-                                                       [ erl_syntax:variable("Model") ])])]),
-         %% Delete function
-         erl_syntax:function(
-           erl_syntax:atom("delete"),
-           [erl_syntax:clause(
-              [erl_syntax:variable("Model")], none, [erl_syntax:application(
-                                                       erl_syntax:atom(erldb),
-                                                       erl_syntax:atom(delete),
-                                                       [ erl_syntax:variable("Model") ])])])
+                            %% Save function
+                            erl_syntax:function(
+                              erl_syntax:atom("save"),
+                              [erl_syntax:clause(
+                                 [erl_syntax:variable("Model")], none, [erl_syntax:application(
+                                                                          erl_syntax:atom(erldb),
+                                                                          erl_syntax:atom(save),
+                                                                          [ erl_syntax:variable("Model") ])])]),
+                            %% Delete function
+                            erl_syntax:function(
+                              erl_syntax:atom("delete"),
+                              [erl_syntax:clause(
+                                 [erl_syntax:variable("Model")], none, [erl_syntax:application(
+                                                                          erl_syntax:atom(erldb),
+                                                                          erl_syntax:atom(delete),
+                                                                          [ erl_syntax:variable("Model") ])])])
 
-        ] ++ Functions ++ RelationFunctions,
+                           ] ++ Functions ++ RelationFunctions,
     Forms = [ erl_syntax:revert(Form) || Form <- AST ],
     case compile:forms(Forms, [report_errors]) of
         {ok, ModuleName, Binary} ->
-            _Module = code:load_binary(ModuleName, "", Binary),
-            BeamFilename = filename:join([atom_to_list(ModuleName) ++ ".beam"]),
-            ok = file:write_file(filename:join([OutDir, BeamFilename]), Binary),
+            logger:info("Compiled model ~s", [ModuleName]),
+            BeamFile = io_lib:format("~s.beam", [ModuleName]),
+            ok = file:write_file(filename:join(OutDir, BeamFile), Binary),
             {ok, ModuleName};
-        _ ->
-            ok
+        Error ->
+            logger:error("Could not compile model ~s, reason: ~p", [Name, Error])
     end.
-
+q
 %%--------------------------------------------------------------------
 %% @doc Splits a list of tokens into list with a single form.
 %% @end
